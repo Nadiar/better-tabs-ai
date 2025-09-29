@@ -402,7 +402,14 @@ class PopupManager {
                 // Re-display remaining suggestions
                 if (this.currentSuggestions.length > 0) {
                     this.displayResults({ suggestions: this.currentSuggestions });
-                    this.showInfo(`✅ Created group "${suggestion.groupName}" with ${response[0].tabCount} tabs. ${this.currentSuggestions.length} suggestions remaining.`);
+                    // Add success message above the results without clearing them
+                    const results = document.getElementById('results');
+                    const successMsg = document.createElement('div');
+                    successMsg.className = 'result-item';
+                    successMsg.style.background = '#e3f2fd';
+                    successMsg.style.borderLeftColor = '#10b981';
+                    successMsg.innerHTML = `<strong>✅ Created group "${suggestion.groupName}" with ${response[0].tabCount} tabs. ${this.currentSuggestions.length} suggestions remaining.</strong>`;
+                    results.insertBefore(successMsg, results.firstChild);
                 } else {
                     this.showSuccess(`✅ Created group "${suggestion.groupName}" with ${response[0].tabCount} tabs. No more suggestions.`);
                 }
