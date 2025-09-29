@@ -79,6 +79,14 @@ class PopupManager {
         this.clearCache();
       });
     }
+
+    // Debug button
+    const debugBtn = document.getElementById('debugBtn');
+    if (debugBtn) {
+      debugBtn.addEventListener('click', () => {
+        this.copyDebugInfo();
+      });
+    }
   }  async checkAIStatus() {
     try {
       // Check AI status through service worker
@@ -460,7 +468,7 @@ class PopupManager {
                 const originalText = clearCacheBtn.textContent;
                 clearCacheBtn.textContent = '✅ Cache Cleared';
                 clearCacheBtn.disabled = true;
-                
+
                 setTimeout(() => {
                     clearCacheBtn.textContent = originalText;
                     clearCacheBtn.disabled = false;
@@ -468,6 +476,126 @@ class PopupManager {
             }
         } catch (error) {
             console.error('Failed to clear cache:', error);
+        }
+    }
+
+    async copyDebugInfo() {
+        const debugBtn = document.getElementById('debugBtn');
+        const originalText = debugBtn.textContent;
+
+        try {
+            debugBtn.disabled = true;
+            debugBtn.textContent = '⏳ Collecting...';
+
+            // Gather all diagnostic info
+            const aiStatus = await this.sendMessage({ action: 'checkAIAvailability' });
+            const progress = await this.sendMessage({ action: 'getAnalysisProgress' });
+            const cacheStats = await this.sendMessage({ action: 'getCacheStats' });
+            const lastResults = await this.sendMessage({ action: 'getLastAnalysisResults' });
+            const tabs = await chrome.tabs.query({});
+            const groups = await chrome.tabGroups.query({});
+
+            const debugInfo = {
+                timestamp: new Date().toISOString(),
+                extension_version: chrome.runtime.getManifest().version,
+                browser: navigator.userAgent,
+
+                ai_status: {
+                    available: aiStatus.available,
+                    status: aiStatus.status,
+                    message: aiStatus.statusMessage,
+                    detail: aiStatus.detailedStatus
+                },
+
+                analysis_state: {
+                    in_progress: progress.inProgress,
+                    current: progress.progress?.current || 0,
+                    total: progress.progress?.total || 0,
+                    status: progress.progress?.status || 'unknown'
+                },
+
+                cache: {
+                    stats: cacheStats.stats,
+                    last_analysis_time: lastResults.timestamp ? new Date(lastResults.timestamp).toISOString() : 'never',
+                    last_results_count: lastResults.results?.suggestions?.length || 0
+                },
+
+                tabs: {
+                    total: tabs.length,
+                    grouped: tabs.filter(t => t.groupId !== -1).length,
+                    ungrouped: tabs.filter(t => t.groupId === -1).length,
+                    special_pages: tabs.filter(t =>
+                        t.url?.startsWith('chrome://') ||
+                        t.url?.startsWith('chrome-extension://') ||
+                        t.url?.startsWith('about:')
+                    ).length,
+                    groups_count: groups.length
+                },
+
+                sample_tabs: tabs.slice(0, 5).map(t => ({
+                    id: t.id,
+                    title: t.title?.substring(0, 50),
+                    url: t.url?.substring(0, 80),
+                    groupId: t.groupId
+                }))
+            };
+
+            // Format as readable text
+            const debugText = `Better Tabs AI - Debug Report
+Generated: ${debugInfo.timestamp}
+Extension Version: ${debugInfo.extension_version}
+
+=== AI STATUS ===
+Available: ${debugInfo.ai_status.available}
+Status: ${debugInfo.ai_status.status}
+Message: ${debugInfo.ai_status.message}
+Detail: ${debugInfo.ai_status.detail}
+
+=== ANALYSIS STATE ===
+In Progress: ${debugInfo.analysis_state.in_progress}
+Progress: ${debugInfo.analysis_state.current}/${debugInfo.analysis_state.total}
+Status: ${debugInfo.analysis_state.status}
+
+=== CACHE ===
+Size: ${debugInfo.cache.stats?.size || 0}/${debugInfo.cache.stats?.maxSize || 0}
+Hits: ${debugInfo.cache.stats?.hits || 0}
+Misses: ${debugInfo.cache.stats?.misses || 0}
+Hit Rate: ${((debugInfo.cache.stats?.hitRate || 0) * 100).toFixed(1)}%
+Last Analysis: ${debugInfo.cache.last_analysis_time}
+Last Results: ${debugInfo.cache.last_results_count} suggestions
+
+=== TABS ===
+Total: ${debugInfo.tabs.total}
+Ungrouped: ${debugInfo.tabs.ungrouped}
+Grouped: ${debugInfo.tabs.grouped}
+Special Pages: ${debugInfo.tabs.special_pages}
+Groups: ${debugInfo.tabs.groups_count}
+
+=== SAMPLE TABS (first 5) ===
+${debugInfo.sample_tabs.map((t, i) => `${i+1}. [${t.groupId}] ${t.title}\n   ${t.url}`).join('\n')}
+
+=== BROWSER ===
+${debugInfo.browser}
+
+=== RAW JSON ===
+${JSON.stringify(debugInfo, null, 2)}
+`;
+
+            // Copy to clipboard
+            await navigator.clipboard.writeText(debugText);
+
+            debugBtn.textContent = '✅ Copied!';
+            setTimeout(() => {
+                debugBtn.textContent = originalText;
+                debugBtn.disabled = false;
+            }, 2000);
+
+            this.showSuccess('Debug info copied to clipboard! Paste it to share.');
+        } catch (error) {
+            console.error('Failed to collect debug info:', error);
+            this.showError('Failed to collect debug info: ' + error.message);
+            debugBtn.textContent = originalText;
+            debugBtn.disabled = false;
         }
     }
 

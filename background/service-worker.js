@@ -564,10 +564,17 @@ class BetterTabsAI {
     for (let i = 0; i < tabs.length; i += BATCH_SIZE) {
       const batch = tabs.slice(i, Math.min(i + BATCH_SIZE, tabs.length));
 
-      // Analyze batch concurrently
+      // Analyze batch concurrently with timeout
       const batchPromises = batch.map(async (tab) => {
         try {
-          const analysis = await this.analyzeTab(tab.id, tab);
+          // Add 30 second timeout per tab
+          const analysisPromise = this.analyzeTab(tab.id, tab);
+          const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Analysis timeout')), 30000)
+          );
+
+          const analysis = await Promise.race([analysisPromise, timeoutPromise]);
+
           if (analysis && !analysis.error && !analysis.fallback) {
             return {
               tabId: tab.id,
@@ -576,7 +583,11 @@ class BetterTabsAI {
           }
           return null;
         } catch (error) {
-          console.error(`Error analyzing tab ${tab.id}:`, error);
+          if (error.message === 'Analysis timeout') {
+            console.warn(`⏱️ Timeout analyzing tab ${tab.id}: ${tab.title}`);
+          } else {
+            console.error(`Error analyzing tab ${tab.id}:`, error);
+          }
           return null;
         }
       });
