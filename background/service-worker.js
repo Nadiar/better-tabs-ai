@@ -888,6 +888,129 @@ Provide a JSON response with this exact structure:
     }
   }
 
+  async getExistingGroupInfo() {
+    try {
+      const groups = await chrome.tabGroups.query({});
+      const groupInfo = [];
+
+      for (const group of groups) {
+        // Get tabs in this group
+        const groupTabs = await chrome.tabs.query({ groupId: group.id });
+
+        if (groupTabs.length > 0) {
+          groupInfo.push({
+            id: group.id,
+            title: group.title || 'Untitled Group',
+            color: group.color,
+            tabCount: groupTabs.length,
+            tabs: groupTabs.map(t => ({
+              id: t.id,
+              title: t.title,
+              url: t.url,
+              domain: this.extractDomain(t.url)
+            }))
+          });
+        }
+      }
+
+      return groupInfo;
+    } catch (error) {
+      console.error('Error getting existing groups:', error);
+      return [];
+    }
+  }
+
+  async suggestAddToExistingGroups(analyses, existingGroups) {
+    const suggestions = [];
+
+    if (existingGroups.length === 0) {
+      return suggestions;
+    }
+
+    // For each ungrouped tab analysis
+    for (const analysis of analyses) {
+      // Find best matching existing group
+      let bestMatch = null;
+      let bestScore = 0;
+
+      for (const group of existingGroups) {
+        const score = this.calculateGroupMatchScore(analysis, group);
+
+        if (score > bestScore && score > 0.6) { // 60% confidence threshold
+          bestScore = score;
+          bestMatch = group;
+        }
+      }
+
+      if (bestMatch) {
+        console.log(`  ➕ "${analysis.title}" → "${bestMatch.title}" (${Math.round(bestScore * 100)}% match)`);
+
+        // Create suggestion to add to existing group
+        suggestions.push({
+          groupName: `Add to "${bestMatch.title}"`,
+          existingGroupId: bestMatch.id,
+          isAddToExisting: true,
+          color: bestMatch.color,
+          tabs: [analysis],
+          confidence: bestScore
+        });
+      }
+    }
+
+    return suggestions;
+  }
+
+  calculateGroupMatchScore(analysis, group) {
+    let score = 0;
+    let factors = 0;
+
+    // Compare category with group title
+    const category = (analysis.category || '').toLowerCase();
+    const groupTitle = (group.title || '').toLowerCase();
+
+    if (category && groupTitle) {
+      // Exact match
+      if (groupTitle.includes(category) || category.includes(groupTitle)) {
+        score += 0.8;
+        factors++;
+      } else {
+        // Partial word match
+        const categoryWords = category.split(/\s+/);
+        const titleWords = groupTitle.split(/\s+/);
+        const matches = categoryWords.filter(w => titleWords.includes(w)).length;
+        if (matches > 0) {
+          score += 0.5 * (matches / Math.max(categoryWords.length, titleWords.length));
+          factors++;
+        }
+      }
+    }
+
+    // Compare domain with existing tabs in group
+    const analysisDomain = analysis.domain || '';
+    if (analysisDomain) {
+      const domainMatch = group.tabs.some(tab => tab.domain === analysisDomain);
+      if (domainMatch) {
+        score += 0.7;
+        factors++;
+      }
+    }
+
+    // Compare keywords with group tab titles
+    if (analysis.keywords && analysis.keywords.length > 0) {
+      const groupText = group.tabs.map(t => t.title.toLowerCase()).join(' ');
+      const keywordMatches = analysis.keywords.filter(kw =>
+        groupText.includes(kw.toLowerCase())
+      ).length;
+
+      if (keywordMatches > 0) {
+        score += 0.4 * (keywordMatches / analysis.keywords.length);
+        factors++;
+      }
+    }
+
+    return factors > 0 ? score / factors : 0;
+  }
+
   createFallbackAnalysis(metadata) {
     // Create a simple categorization based on domain and title
     let category = 'Uncategorized';
@@ -930,6 +1053,10 @@ Provide a JSON response with this exact structure:
 
       console.log('📊 Suggesting groups from', analyses.length, 'analyses');
 
+      // Get existing tab groups to check for matches
+      const existingGroups = await this.getExistingGroupInfo();
+      console.log('📁 Found', existingGroups.length, 'existing groups:', existingGroups.map(g => g.title).join(', '));
+
       // First, group by exact category match
       const exactGroups = {};
       analyses.forEach(analysis => {
@@ -944,6 +1071,13 @@ Provide a JSON response with this exact structure:
       console.log('📋 Category groups:', Object.entries(exactGroups).map(([cat, tabs]) => `${cat} (${tabs.length})`).join(', '));
 
       const suggestions = [];
+
+      // Check for tabs that could be added to existing groups
+      const addToGroupSuggestions = await this.suggestAddToExistingGroups(analyses, existingGroups);
+      if (addToGroupSuggestions.length > 0) {
+        console.log('➕ Found', addToGroupSuggestions.length, 'tabs to add to existing groups');
+        suggestions.push(...addToGroupSuggestions);
+      }
 
       // Process each exact category group
       for (const [category, tabs] of Object.entries(exactGroups)) {
@@ -1173,30 +1307,51 @@ Provide a JSON response with this exact structure:
             continue;
           }
 
-          console.log('Creating group with tab IDs:', tabIds);
+          console.log('Creating/updating group with tab IDs:', tabIds);
 
-          // Create the tab group
-          const group = await chrome.tabs.group({
-            tabIds: tabIds
-          });
+          // Check if this is adding to an existing group
+          if (suggestion.isAddToExisting && suggestion.existingGroupId) {
+            // Add tabs to existing group
+            const group = await chrome.tabs.group({
+              groupId: suggestion.existingGroupId,
+              tabIds: tabIds
+            });
 
-          console.log('Created group ID:', group);
+            console.log('Added to existing group ID:', group);
 
-          // Update group properties
-          await chrome.tabGroups.update(group, {
-            title: suggestion.groupName,
-            color: suggestion.color,
-            collapsed: false
-          });
+            results.push({
+              groupId: group,
+              name: suggestion.groupName,
+              tabCount: tabIds.length,
+              success: true,
+              addedToExisting: true
+            });
 
-          results.push({
-            groupId: group,
-            name: suggestion.groupName,
-            tabCount: tabIds.length,
-            success: true
-          });
+            console.log(`✅ Added ${tabIds.length} tab(s) to existing group "${suggestion.groupName}"`);
+          } else {
+            // Create new tab group
+            const group = await chrome.tabs.group({
+              tabIds: tabIds
+            });
 
-          console.log(`✅ Created group "${suggestion.groupName}" with ${tabIds.length} tabs`);
+            console.log('Created group ID:', group);
+
+            // Update group properties
+            await chrome.tabGroups.update(group, {
+              title: suggestion.groupName,
+              color: suggestion.color,
+              collapsed: false
+            });
+
+            results.push({
+              groupId: group,
+              name: suggestion.groupName,
+              tabCount: tabIds.length,
+              success: true
+            });
+
+            console.log(`✅ Created group "${suggestion.groupName}" with ${tabIds.length} tabs`);
+          }
         } catch (error) {
           console.error(`Error creating group "${suggestion.groupName}":`, error);
           results.push({
