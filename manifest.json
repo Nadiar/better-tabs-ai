@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Better Tabs AI",
   "description": "AI-powered tab organization and grouping with automatic summarization",
-  "version": "1.5.0",
+  "version": "1.5.1",
   "action": {
     "default_popup": "popup/popup.html",
     "default_title": "Better Tabs AI",
