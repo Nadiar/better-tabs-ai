@@ -1,12 +1,140 @@
 // Better Tabs AI - Service Worker
 // Handles AI processing and tab management
 
+// Import cache manager (inline since service workers don't support ES6 imports)
+// Cache Manager - LRU cache with configurable size and TTL
+class CacheManager {
+  constructor(options = {}) {
+    this.maxSize = options.maxSize || 100;
+    this.defaultTTL = options.defaultTTL || 60000;
+    this.cache = new Map();
+    this.accessOrder = [];
+    this.stats = { hits: 0, misses: 0, evictions: 0, invalidations: 0 };
+  }
+
+  generateKey(metadata, content = null) {
+    const baseKey = `${metadata.url}_${metadata.title}`;
+    if (content && content.excerpt) {
+      const contentHash = this._simpleHash(content.excerpt.substring(0, 200));
+      return `${baseKey}_${contentHash}`;
+    }
+    return baseKey;
+  }
+
+  get(key, ttl = null) {
+    const entry = this.cache.get(key);
+    if (!entry) {
+      this.stats.misses++;
+      return null;
+    }
+
+    const age = Date.now() - entry.timestamp;
+    const maxAge = ttl !== null ? ttl : this.defaultTTL;
+
+    if (age > maxAge) {
+      this.cache.delete(key);
+      this._removeFromAccessOrder(key);
+      this.stats.misses++;
+      return null;
+    }
+
+    entry.accessCount++;
+    entry.lastAccess = Date.now();
+    this._updateAccessOrder(key);
+    this.stats.hits++;
+    return entry.value;
+  }
+
+  set(key, value, options = {}) {
+    if (this.cache.size >= this.maxSize && !this.cache.has(key)) {
+      this._evictLRU();
+    }
+
+    this.cache.set(key, {
+      value,
+      timestamp: Date.now(),
+      lastAccess: Date.now(),
+      accessCount: 0,
+      contentHash: options.contentHash || null
+    });
+
+    this._updateAccessOrder(key);
+  }
+
+  invalidate(key) {
+    if (this.cache.delete(key)) {
+      this._removeFromAccessOrder(key);
+      this.stats.invalidations++;
+      return true;
+    }
+    return false;
+  }
+
+  invalidateByUrl(url) {
+    let count = 0;
+    for (const key of this.cache.keys()) {
+      if (key.startsWith(url)) {
+        this.cache.delete(key);
+        this._removeFromAccessOrder(key);
+        count++;
+      }
+    }
+    this.stats.invalidations += count;
+    return count;
+  }
+
+  clear() {
+    const size = this.cache.size;
+    this.cache.clear();
+    this.accessOrder = [];
+    this.stats.invalidations += size;
+  }
+
+  getStats() {
+    return {
+      ...this.stats,
+      size: this.cache.size,
+      maxSize: this.maxSize,
+      hitRate: this.stats.hits / (this.stats.hits + this.stats.misses) || 0
+    };
+  }
+
+  _evictLRU() {
+    if (this.accessOrder.length === 0) return;
+    const lruKey = this.accessOrder.shift();
+    this.cache.delete(lruKey);
+    this.stats.evictions++;
+  }
+
+  _updateAccessOrder(key) {
+    this._removeFromAccessOrder(key);
+    this.accessOrder.push(key);
+  }
+
+  _removeFromAccessOrder(key) {
+    const index = this.accessOrder.indexOf(key);
+    if (index > -1) {
+      this.accessOrder.splice(index, 1);
+    }
+  }
+
+  _simpleHash(str) {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash;
+    }
+    return Math.abs(hash).toString(36);
+  }
+}
+
 class BetterTabsAI {
   constructor() {
     this.session = null;
     this.sessionCreated = false;
     this.isAIAvailable = false;
-    this.analysisCache = new Map();
+    this.cacheManager = new CacheManager({ maxSize: 100, defaultTTL: 60000 });
     this.init();
   }
 
@@ -87,12 +215,20 @@ class BetterTabsAI {
       return true; // Keep message channel open for async responses
     });
 
-    // Listen for tab updates (for future real-time features)
+    // Listen for tab updates and invalidate cache
     chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-      if (changeInfo.status === 'complete') {
-        // Tab finished loading - could trigger analysis in future versions
-        console.log('Tab updated:', tab.title);
+      if (changeInfo.status === 'complete' && tab.url) {
+        // Tab finished loading - invalidate cache for this URL
+        const invalidated = this.cacheManager.invalidateByUrl(tab.url);
+        if (invalidated > 0) {
+          console.log(`Cache invalidated for ${tab.url}: ${invalidated} entries`);
+        }
       }
+    });
+
+    // Listen for tab removal to clean up cache
+    chrome.tabs.onRemoved.addListener((tabId, removeInfo) => {
+      // Cache will naturally expire, but we could add cleanup here if needed
     });
   }
 
@@ -130,9 +266,13 @@ class BetterTabsAI {
           break;
 
         case 'clearCache':
-          this.analysisCache.clear();
+          this.cacheManager.clear();
           console.log('🧹 Analysis cache cleared');
-          sendResponse({ success: true });
+          sendResponse({ success: true, stats: this.cacheManager.getStats() });
+          break;
+
+        case 'getCacheStats':
+          sendResponse({ stats: this.cacheManager.getStats() });
           break;
 
         default:
@@ -215,26 +355,16 @@ class BetterTabsAI {
         return { error: 'AI not available', requiresSetup: true };
       }
 
-      // Check cache first - tabs change frequently so shorter cache
-      const cacheKey = 'all_tabs_analysis';
-      const cached = this.analysisCache.get(cacheKey);
-      
-      // Use cache if less than 1 minute old
-      if (cached && (Date.now() - cached.timestamp) < 60000) {
-        console.log('📋 Using cached tab analysis results');
-        return cached.result;
-      }
-
       // Get all tabs
       const tabs = await chrome.tabs.query({});
       console.log(`Analyzing ${tabs.length} tabs`);
 
       // Check if we have a large number of tabs
       if (tabs.length > 50) {
-        return { 
-          error: 'Large number of tabs detected', 
+        return {
+          error: 'Large number of tabs detected',
           tabCount: tabs.length,
-          requiresPermission: true 
+          requiresPermission: true
         };
       }
 
@@ -246,7 +376,8 @@ class BetterTabsAI {
         totalTabs: tabs.length,
         ungroupedTabs: ungroupedTabs.length,
         analyses: [],
-        suggestions: []
+        suggestions: [],
+        cacheStats: this.cacheManager.getStats()
       };
 
       // Analyze each ungrouped tab
@@ -269,11 +400,8 @@ class BetterTabsAI {
         results.suggestions = await this.suggestGroups(results.analyses);
       }
 
-      // Cache the results
-      this.analysisCache.set(cacheKey, {
-        result: results,
-        timestamp: Date.now()
-      });
+      // Update cache stats
+      results.cacheStats = this.cacheManager.getStats();
 
       return results;
     } catch (error) {
@@ -287,13 +415,6 @@ class BetterTabsAI {
       // Get tab data if not provided
       if (!tabData) {
         tabData = await chrome.tabs.get(tabId);
-      }
-
-      // Check cache first
-      const cacheKey = `${tabData.url}_${tabData.title}`;
-      if (this.analysisCache.has(cacheKey)) {
-        console.log('Using cached analysis for:', tabData.title);
-        return this.analysisCache.get(cacheKey);
       }
 
       // Start with metadata analysis (staged approach)
@@ -316,11 +437,22 @@ class BetterTabsAI {
         console.log('Could not extract content from tab:', error.message);
       }
 
+      // Generate cache key with content hash
+      const cacheKey = this.cacheManager.generateKey(metadata, content);
+
+      // Check cache first
+      const cached = this.cacheManager.get(cacheKey);
+      if (cached) {
+        console.log('✅ Cache hit for:', tabData.title);
+        return cached;
+      }
+
+      console.log('❌ Cache miss for:', tabData.title);
       const analysis = await this.performAIAnalysis(metadata, content);
-      
+
       // Cache the result
-      this.analysisCache.set(cacheKey, analysis);
-      
+      this.cacheManager.set(cacheKey, analysis);
+
       return analysis;
     } catch (error) {
       console.error('Error analyzing tab:', error);
