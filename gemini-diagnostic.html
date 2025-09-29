@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Gemini Nano Diagnostic</title>
+</head>
+<body>
+    <h1>Gemini Nano Diagnostic Tool</h1>
+    <div id='results'></div>
+    
+    <script>
+    async function runDiagnostic() {
+        const results = document.getElementById('results');
+        
+        function log(message) {
+            results.innerHTML += message + '<br>';
+            console.log(message);
+        }
+        
+        log('🔍 Starting Gemini Nano Diagnostic...');
+        log('=====================================');
+        
+        // Check Chrome version
+        const userAgent = navigator.userAgent;
+        const chromeVersion = userAgent.match(/Chrome\/(\d+)/)?.[1];
+        log('Chrome Version: ' + (chromeVersion || 'Unknown'));
+        
+        // Check for AI APIs
+        log('');
+        log('🔍 Checking for AI APIs...');
+        
+        // Check window.ai
+        if (typeof window.ai !== 'undefined') {
+            log('✅ window.ai is available');
+            if (window.ai.languageModel) {
+                log('✅ window.ai.languageModel is available');
+                try {
+                    const availability = await window.ai.languageModel.availability();
+                    log('📊 window.ai.languageModel availability: ' + availability);
+                } catch (error) {
+                    log('❌ Error checking window.ai.languageModel: ' + error.message);
+                }
+            } else {
+                log('❌ window.ai.languageModel is NOT available');
+            }
+        } else {
+            log('❌ window.ai is NOT available');
+        }
+        
+        // Check LanguageModel
+        if (typeof LanguageModel !== 'undefined') {
+            log('✅ LanguageModel global is available');
+            try {
+                const availability = await LanguageModel.availability();
+                log('📊 LanguageModel availability: ' + availability);
+                
+                if (availability === 'available') {
+                    log('🟢 SUCCESS: Ready to use!');
+                } else if (availability === 'downloadable') {
+                    log('🟡 NEEDS DOWNLOAD: Try creating a session');
+                    try {
+                        log('🔄 Attempting to create session to trigger download...');
+                        const session = await LanguageModel.create({
+                            expectedInputs: [{ type: "text", languages: ["en"] }],
+                            expectedOutputs: [{ type: "text", languages: ["en"] }]
+                        });
+                        log('✅ Session created successfully!');
+                        
+                        // Test a simple prompt
+                        try {
+                            const response = await session.prompt('Say hello');
+                            log('✅ Test prompt successful: ' + response);
+                        } catch (promptError) {
+                            log('⚠️ Session created but prompt failed: ' + promptError.message);
+                        }
+                        
+                        session.destroy();
+                        log('✅ Session destroyed to free resources');
+                    } catch (createError) {
+                        log('❌ Failed to create session: ' + createError.message);
+                    }
+                } else if (availability === 'downloading') {
+                    log('🟡 DOWNLOADING: Please wait...');
+                } else {
+                    log('🔴 UNAVAILABLE: ' + availability);
+                }
+            } catch (error) {
+                log('❌ Error checking LanguageModel: ' + error.message);
+            }
+        } else {
+            log('❌ LanguageModel global is NOT available');
+        }
+        
+        // List all AI-related globals
+        log('');
+        log('🔍 All AI-related globals:');
+        const aiGlobals = Object.keys(window).filter(k => 
+            k.toLowerCase().includes('ai') || 
+            k.toLowerCase().includes('language') ||
+            k.toLowerCase().includes('gemini') ||
+            k.toLowerCase().includes('model')
+        );
+        if (aiGlobals.length > 0) {
+            aiGlobals.forEach(global => log('  - ' + global));
+        } else {
+            log('  - None found');
+        }
+        
+        log('');
+        log('🛠️ Next Steps:');
+        log('1. If LanguageModel not found: Enable chrome://flags/#prompt-api-for-gemini-nano');
+        log('2. If downloadable: The model will download when first used');
+        log('3. If unavailable: Check chrome://on-device-internals');
+        log('4. Restart Chrome completely after enabling flags');
+    }
+    
+    // Run diagnostic when page loads
+    runDiagnostic();
+    </script>
+</body>
+</html>

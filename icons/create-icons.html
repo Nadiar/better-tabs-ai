@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Icon Generator</title>
+    <style>
+        canvas { border: 1px solid #ccc; margin: 10px; }
+        .icon-set { margin: 20px 0; }
+    </style>
+</head>
+<body>
+    <h1>Better Tabs AI - Icon Generator</h1>
+    <p>This page generates the extension icons. Right-click each canvas and "Save image as" to download the PNG files.</p>
+    
+    <div class="icon-set">
+        <h3>16x16 Icon</h3>
+        <canvas id="icon16" width="16" height="16"></canvas>
+        
+        <h3>32x32 Icon</h3>
+        <canvas id="icon32" width="32" height="32"></canvas>
+        
+        <h3>48x48 Icon</h3>
+        <canvas id="icon48" width="48" height="48"></canvas>
+        
+        <h3>128x128 Icon</h3>
+        <canvas id="icon128" width="128" height="128"></canvas>
+    </div>
+
+    <script>
+        function createIcon(canvasId, size) {
+            const canvas = document.getElementById(canvasId);
+            const ctx = canvas.getContext('2d');
+            
+            // Create gradient background
+            const gradient = ctx.createLinearGradient(0, 0, size, size);
+            gradient.addColorStop(0, '#667eea');
+            gradient.addColorStop(1, '#764ba2');
+            
+            // Fill background
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, size, size);
+            
+            // Add AI brain/network icon
+            ctx.strokeStyle = 'white';
+            ctx.fillStyle = 'white';
+            ctx.lineWidth = Math.max(1, size / 32);
+            
+            const centerX = size / 2;
+            const centerY = size / 2;
+            const radius = size * 0.15;
+            
+            // Draw nodes
+            const nodes = [
+                [centerX, centerY - radius],
+                [centerX - radius, centerY],
+                [centerX + radius, centerY],
+                [centerX, centerY + radius],
+                [centerX - radius/2, centerY - radius/2],
+                [centerX + radius/2, centerY + radius/2]
+            ];
+            
+            // Draw connections
+            ctx.beginPath();
+            nodes.forEach(node => {
+                nodes.forEach(otherNode => {
+                    if (node !== otherNode) {
+                        ctx.moveTo(node[0], node[1]);
+                        ctx.lineTo(otherNode[0], otherNode[1]);
+                    }
+                });
+            });
+            ctx.stroke();
+            
+            // Draw nodes
+            nodes.forEach(node => {
+                ctx.beginPath();
+                ctx.arc(node[0], node[1], Math.max(1, size / 32), 0, 2 * Math.PI);
+                ctx.fill();
+            });
+            
+            // Add "AI" text for larger icons
+            if (size >= 32) {
+                ctx.font = `bold ${size/6}px Arial`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('AI', centerX, centerY + radius * 1.8);
+            }
+        }
+        
+        // Generate all icons
+        createIcon('icon16', 16);
+        createIcon('icon32', 32);
+        createIcon('icon48', 48);
+        createIcon('icon128', 128);
+        
+        // Add download functionality
+        document.querySelectorAll('canvas').forEach(canvas => {
+            canvas.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                const link = document.createElement('a');
+                link.download = canvas.id + '.png';
+                link.href = canvas.toDataURL();
+                link.click();
+            });
+            
+            canvas.addEventListener('click', () => {
+                const link = document.createElement('a');
+                link.download = canvas.id + '.png';
+                link.href = canvas.toDataURL();
+                link.click();
+            });
+        });
+    </script>
+</body>
+</html>

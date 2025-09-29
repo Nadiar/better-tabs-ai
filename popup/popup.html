@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Better Tabs AI</title>
+    <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">
+                <img src="../icons/icon32.png" alt="Better Tabs AI" onerror="this.style.display='none'">
+                <h1>Better Tabs AI</h1>
+            </div>
+            <div class="status" id="aiStatus">
+                <span class="status-dot" id="statusDot"></span>
+                <span id="statusText">Checking AI...</span>
+            </div>
+        </header>
+
+        <main>
+            <div id="aiNotAvailable" class="error-message" style="display: none;">
+                <h3>⚠️ Chrome AI Not Available</h3>
+                <p>This extension requires Chrome's built-in AI (Gemini Nano).</p>
+                <p><strong>Troubleshooting Steps:</strong></p>
+                <ol style="text-align: left; font-size: 12px; margin-left: 20px;">
+                    <li>Go to <code>chrome://flags</code></li>
+                    <li>Search for "Prompt API for Gemini Nano"</li>
+                    <li>Set it to "Enabled"</li>
+                    <li>Restart Chrome completely</li>
+                    <li>Check <code>chrome://on-device-internals</code> for model status</li>
+                </ol>
+                <p><strong>Requirements:</strong></p>
+                <ul style="text-align: left; font-size: 11px; margin-left: 20px;">
+                    <li>Chrome 118+ with AI features enabled</li>
+                    <li>At least 4GB GPU memory</li>
+                    <li>22GB free storage space</li>
+                </ul>
+                <button id="recheckAI" class="secondary-btn" style="margin-top: 10px;">
+                    🔄 Check Again
+                </button>
+            </div>
+
+            <div id="mainInterface" style="display: none;">
+                <div class="quick-actions">
+                    <button id="analyzeTabsBtn" class="primary-btn">
+                        🤖 Analyze & Group Tabs
+                    </button>
+                    
+                    <button id="findDuplicatesBtn" class="secondary-btn">
+                        🔍 Find Duplicates
+                    </button>
+                    
+                    <button id="clearCacheBtn" class="secondary-btn">
+                        🧹 Clear Cache
+                    </button>
+                </div>
+
+                <div class="stats" id="tabStats">
+                    <div class="stat">
+                        <span class="stat-number" id="totalTabs">-</span>
+                        <span class="stat-label">Total Tabs</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-number" id="ungroupedTabs">-</span>
+                        <span class="stat-label">Ungrouped</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-number" id="groups">-</span>
+                        <span class="stat-label">Groups</span>
+                    </div>
+                </div>
+
+                <div class="results" id="results" style="display: none;"></div>
+            </div>
+        </main>
+
+        <footer>
+            <button id="openFullInterface" class="link-btn">
+                � Full Interface (Coming Soon)
+            </button>
+            <button id="settingsBtn" class="link-btn">
+                🚧 Settings (Coming Soon)
+            </button>
+        </footer>
+    </div>
+
+    <script src="popup.js"></script>
+</body>
+</html>
