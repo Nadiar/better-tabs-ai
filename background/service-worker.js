@@ -928,6 +928,8 @@ Provide a JSON response with this exact structure:
         await this.createAISession();
       }
 
+      console.log('📊 Suggesting groups from', analyses.length, 'analyses');
+
       // First, group by exact category match
       const exactGroups = {};
       analyses.forEach(analysis => {
@@ -936,28 +938,39 @@ Provide a JSON response with this exact structure:
           exactGroups[category] = [];
         }
         exactGroups[category].push(analysis);
+        console.log('  -', analysis.title, '→', category);
       });
 
+      console.log('📋 Category groups:', Object.entries(exactGroups).map(([cat, tabs]) => `${cat} (${tabs.length})`).join(', '));
+
       const suggestions = [];
-      
+
       // Process each exact category group
       for (const [category, tabs] of Object.entries(exactGroups)) {
+        console.log(`  Processing category "${category}" with ${tabs.length} tabs`);
         if (tabs.length >= 2) {
           // For larger groups, try to create subcategories based on domains or keywords
           if (tabs.length >= 4) {
             const subGroups = this.createSubGroups(tabs, category);
+            console.log(`    Created ${subGroups.length} subgroups`);
             suggestions.push(...subGroups);
           } else {
             // Smaller groups keep the main category
-            suggestions.push({
+            const suggestion = {
               groupName: category,
               color: this.getCategoryColor(category),
               tabs: tabs,
               confidence: tabs.reduce((sum, tab) => sum + (tab.confidence || 0), 0) / tabs.length
-            });
+            };
+            console.log(`    Created suggestion: "${category}" with ${tabs.length} tabs`);
+            suggestions.push(suggestion);
           }
+        } else {
+          console.log(`    Skipped (only ${tabs.length} tab, need 2+)`);
         }
       }
+
+      console.log(`✅ Generated ${suggestions.length} total suggestions`);
 
       // Sort by confidence and tab count
       suggestions.sort((a, b) => {
