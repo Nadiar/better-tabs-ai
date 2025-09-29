@@ -610,7 +610,26 @@ class PopupManager {
                     title: t.title?.substring(0, 50),
                     url: t.url?.substring(0, 80),
                     groupId: t.groupId
-                }))
+                })),
+
+                analysis_details: lastResults.results ? {
+                    total_analyzed: lastResults.results.analyses?.length || 0,
+                    categories_found: (() => {
+                        const categoryMap = {};
+                        (lastResults.results.analyses || []).forEach(a => {
+                            const cat = a.category || 'Unknown';
+                            categoryMap[cat] = (categoryMap[cat] || 0) + 1;
+                        });
+                        return categoryMap;
+                    })(),
+                    existing_groups: lastResults.results.existingGroups || [],
+                    suggestions_breakdown: lastResults.results.suggestions?.map(s => ({
+                        name: s.groupName,
+                        type: s.isAddToExisting ? 'add_to_existing' : 'create_new',
+                        tab_count: s.tabs?.length || 0,
+                        confidence: Math.round((s.confidence || 0) * 100)
+                    })) || []
+                } : null
             };
 
             // Format as readable text
@@ -646,6 +665,17 @@ Groups: ${debugInfo.tabs.groups_count}
 
 === SAMPLE TABS (first 5) ===
 ${debugInfo.sample_tabs.map((t, i) => `${i+1}. [${t.groupId}] ${t.title}\n   ${t.url}`).join('\n')}
+
+=== ANALYSIS DETAILS ===
+${debugInfo.analysis_details ? `
+Total Tabs Analyzed: ${debugInfo.analysis_details.total_analyzed}
+Categories Found: ${JSON.stringify(debugInfo.analysis_details.categories_found, null, 2)}
+Existing Groups: ${JSON.stringify(debugInfo.analysis_details.existing_groups, null, 2)}
+Suggestions: ${debugInfo.analysis_details.suggestions_breakdown.length} total
+${debugInfo.analysis_details.suggestions_breakdown.map((s, i) =>
+  `  ${i+1}. ${s.name} [${s.type}] - ${s.tab_count} tab(s), ${s.confidence}% confidence`
+).join('\n')}
+` : 'No analysis results available'}
 
 === BROWSER ===
 ${debugInfo.browser}

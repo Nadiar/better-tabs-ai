@@ -622,7 +622,9 @@ class BetterTabsAI {
     // Generate grouping suggestions
     if (results.analyses.length > 0) {
       this.analysisProgress.status = 'grouping';
-      results.suggestions = await this.suggestGroups(results.analyses);
+      const suggestionResult = await this.suggestGroups(results.analyses);
+      results.suggestions = suggestionResult.suggestions;
+      results.existingGroups = suggestionResult.existingGroups;
     }
 
     // Update cache stats
@@ -1113,10 +1115,17 @@ Provide a JSON response with this exact structure:
         return scoreB - scoreA;
       });
 
-      return suggestions;
+      // Return both suggestions and existing groups info for debugging
+      return {
+        suggestions: suggestions,
+        existingGroups: existingGroups.map(g => ({
+          title: g.title,
+          tabCount: g.tabCount
+        }))
+      };
     } catch (error) {
       console.error('Error suggesting groups:', error);
-      return [];
+      return { suggestions: [], existingGroups: [] };
     }
   }
 
