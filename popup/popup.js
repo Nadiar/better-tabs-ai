@@ -92,7 +92,7 @@ class PopupManager {
         this.copyDebugInfo();
       });
     }
-  }  async checkAIStatus() {
+  }  async checkAIStatus(retryCount = 0) {
     try {
       // Check AI status through service worker
       const response = await this.sendMessage({ action: 'checkAIAvailability' });
@@ -139,9 +139,23 @@ class PopupManager {
 
         aiNotAvailable.style.display = 'block';
         mainInterface.style.display = 'none';
+
+        // Retry once after 500ms if AI isn't available (race condition with service worker init)
+        if (retryCount === 0 && status === 'unknown-error') {
+          console.log('AI status unknown, retrying in 500ms...');
+          setTimeout(() => this.checkAIStatus(1), 500);
+        }
       }
     } catch (error) {
       console.error('Error checking AI status:', error);
+
+      // Retry once after 500ms on error (service worker may still be initializing)
+      if (retryCount === 0) {
+        console.log('Error checking AI status, retrying in 500ms...');
+        setTimeout(() => this.checkAIStatus(1), 500);
+        return;
+      }
+
       document.getElementById('statusText').textContent = 'Error';
       document.getElementById('statusText').title = error.message;
       document.getElementById('statusDot').className = 'status-dot unavailable';
@@ -328,7 +342,7 @@ class PopupManager {
                     const index = parseInt(event.target.getAttribute('data-suggestion-index'));
                     const suggestion = this.currentSuggestions[index];
                     if (suggestion) {
-                        this.createGroup(suggestion);
+                        this.createGroup(suggestion, index);
                     }
                 });
             });
@@ -371,25 +385,64 @@ class PopupManager {
         results.style.display = 'block';
     }
 
-    async createGroup(suggestion) {
+    async createGroup(suggestion, suggestionIndex) {
         try {
             console.log('Creating group with suggestion:', suggestion);
-            const response = await this.sendMessage({ 
-                action: 'createGroups', 
-                groups: [suggestion] 
+            const response = await this.sendMessage({
+                action: 'createGroups',
+                groups: [suggestion]
             });
 
             console.log('Create group response:', response);
 
             if (response[0]?.success) {
-                this.showSuccess(`Created group "${suggestion.groupName}" with ${suggestion.tabs.length} tabs`);
+                // Remove the created suggestion from the list
+                this.currentSuggestions.splice(suggestionIndex, 1);
+
+                // Re-display remaining suggestions
+                if (this.currentSuggestions.length > 0) {
+                    this.displayResults({ suggestions: this.currentSuggestions });
+                    this.showInfo(`✅ Created group "${suggestion.groupName}" with ${response[0].tabCount} tabs. ${this.currentSuggestions.length} suggestions remaining.`);
+                } else {
+                    this.showSuccess(`✅ Created group "${suggestion.groupName}" with ${response[0].tabCount} tabs. No more suggestions.`);
+                }
+
                 await this.updateTabStats();
+
+                // Update cached results to reflect the removal
+                this.updateCachedResults();
             } else {
-                this.showError(response[0]?.error || 'Failed to create group');
+                const errorMsg = response[0]?.error || 'Failed to create group';
+                this.showError(errorMsg);
+
+                // If no ungrouped tabs, remove this suggestion
+                if (errorMsg === 'No ungrouped tabs available') {
+                    this.currentSuggestions.splice(suggestionIndex, 1);
+                    if (this.currentSuggestions.length > 0) {
+                        this.displayResults({ suggestions: this.currentSuggestions });
+                    }
+                }
             }
         } catch (error) {
             console.error('Error creating group:', error);
             this.showError(error.message);
+        }
+    }
+
+    async updateCachedResults() {
+        try {
+            // Update the stored cache with remaining suggestions
+            const stored = await chrome.storage.local.get(['lastAnalysisResults', 'lastAnalysisTime', 'lastAnalysisTabCount']);
+            if (stored.lastAnalysisResults) {
+                stored.lastAnalysisResults.suggestions = this.currentSuggestions;
+                await chrome.storage.local.set({
+                    lastAnalysisResults: stored.lastAnalysisResults,
+                    lastAnalysisTime: stored.lastAnalysisTime,
+                    lastAnalysisTabCount: stored.lastAnalysisTabCount
+                });
+            }
+        } catch (error) {
+            console.error('Error updating cached results:', error);
         }
     }
 
