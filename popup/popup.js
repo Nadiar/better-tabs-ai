@@ -32,14 +32,18 @@ class PopupManager {
                 button.disabled = true;
                 this.startProgressMonitoring();
             } else if (progressResponse.progress && progressResponse.progress.status === 'complete') {
-                // Show last results
+                // Show last results if available
                 const resultsResponse = await this.sendMessage({ action: 'getLastAnalysisResults' });
 
                 if (resultsResponse.results && resultsResponse.timestamp) {
-                    // Only show if less than 5 minutes old
+                    // Show cached results regardless of age
+                    // (cache invalidation is handled by tab count changes)
+                    this.displayResults(resultsResponse.results);
+
                     const age = Date.now() - resultsResponse.timestamp;
-                    if (age < 5 * 60 * 1000) {
-                        this.displayResults(resultsResponse.results);
+                    if (age > 60 * 1000) {
+                        // Show age hint if older than 1 minute
+                        this.showInfo(`Showing cached results from ${Math.round(age / 1000)}s ago`);
                     }
                 }
             }
