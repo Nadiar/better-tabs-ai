@@ -521,26 +521,24 @@ class BetterTabsAI {
         };
       }
 
-      // Check for recent cached results unless force refresh
+      // Check for cached results unless force refresh
       if (!forceRefresh) {
         const stored = await chrome.storage.local.get(['lastAnalysisResults', 'lastAnalysisTime', 'lastAnalysisTabCount']);
         if (stored.lastAnalysisResults && stored.lastAnalysisTime) {
           const age = Date.now() - stored.lastAnalysisTime;
           const tabCountChanged = stored.lastAnalysisTabCount !== groupableTabs.length;
 
-          // Use cached results if less than 2 minutes old and tab count unchanged
-          if (age < 2 * 60 * 1000 && !tabCountChanged) {
-            console.log('✅ Using cached analysis results (age:', Math.round(age / 1000), 'seconds)');
+          // Use cached results if tab count hasn't changed
+          if (!tabCountChanged) {
+            console.log('✅ Using cached analysis results (age:', Math.round(age / 1000), 'seconds, tab count unchanged)');
             return {
               ...stored.lastAnalysisResults,
               cached: true,
               cacheAge: age,
-              message: `Using recent analysis from ${Math.round(age / 1000)}s ago`
+              message: `Using cached analysis (${Math.round(age / 1000)}s old)`
             };
-          } else if (tabCountChanged) {
-            console.log('🔄 Tab count changed, refreshing analysis');
           } else {
-            console.log('🔄 Cached results too old, refreshing analysis');
+            console.log('🔄 Tab count changed:', stored.lastAnalysisTabCount, '→', groupableTabs.length, '- refreshing analysis');
           }
         }
       }
