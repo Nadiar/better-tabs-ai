@@ -2,11 +2,10 @@
 // Handles AI processing and tab management
 
 // Import cache manager (inline since service workers don't support ES6 imports)
-// Cache Manager - LRU cache with configurable size and TTL
+// Cache Manager - LRU cache with content-based invalidation (no TTL)
 class CacheManager {
   constructor(options = {}) {
     this.maxSize = options.maxSize || 100;
-    this.defaultTTL = options.defaultTTL || 60000;
     this.cache = new Map();
     this.accessOrder = [];
     this.stats = { hits: 0, misses: 0, evictions: 0, invalidations: 0 };
@@ -21,23 +20,15 @@ class CacheManager {
     return baseKey;
   }
 
-  get(key, ttl = null) {
+  get(key) {
     const entry = this.cache.get(key);
     if (!entry) {
       this.stats.misses++;
       return null;
     }
 
-    const age = Date.now() - entry.timestamp;
-    const maxAge = ttl !== null ? ttl : this.defaultTTL;
-
-    if (age > maxAge) {
-      this.cache.delete(key);
-      this._removeFromAccessOrder(key);
-      this.stats.misses++;
-      return null;
-    }
-
+    // No TTL check - cache is valid until content changes (detected by hash in key)
+    // This allows cache to work indefinitely for unchanged pages
     entry.accessCount++;
     entry.lastAccess = Date.now();
     this._updateAccessOrder(key);
@@ -190,7 +181,7 @@ class BetterTabsAI {
     this.sessionCreated = false;
     this.isAIAvailable = false;
     this.aiStatus = AIStatus.UNKNOWN_ERROR;
-    this.cacheManager = new CacheManager({ maxSize: 100, defaultTTL: 60000 });
+    this.cacheManager = new CacheManager({ maxSize: 100 });
     this.analysisInProgress = false;
     this.analysisProgress = { current: 0, total: 0, status: 'idle' };
     this.init();
