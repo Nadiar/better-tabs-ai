@@ -760,7 +760,12 @@ Provide a JSON response with this exact structure:
       // Use the persistent service worker AI session
       console.log('Sending prompt to AI session...');
       const response = await this.aiSession.prompt(prompt);
-      console.log('Received AI response:', response.substring(0, 100) + '...');
+      console.log('Received AI response (length:', response.length, '):', response.substring(0, 100) + '...');
+
+      // Warn if response seems truncated
+      if (response.length < 50) {
+        console.warn('⚠️ Response seems unusually short, may be truncated');
+      }
 
       // Parse the response (handle markdown code blocks)
       try {
@@ -800,28 +805,62 @@ Provide a JSON response with this exact structure:
     // Handle markdown code blocks that wrap JSON
     // Common patterns: ```json\n{...}\n``` or ```\n{...}\n``` or just {...}
 
+    if (!text || text.trim().length === 0) {
+      throw new Error('Empty response from AI');
+    }
+
     // First try to extract from markdown code blocks
     const codeBlockMatch = text.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
     if (codeBlockMatch) {
-      try {
-        return JSON.parse(codeBlockMatch[1].trim());
-      } catch (e) {
-        // If extraction failed, fall through to other methods
+      const jsonText = codeBlockMatch[1].trim();
+      if (jsonText.length > 0) {
+        try {
+          return JSON.parse(jsonText);
+        } catch (e) {
+          console.warn('Failed to parse markdown code block JSON:', e.message);
+          console.warn('Extracted text:', jsonText.substring(0, 200));
+        }
       }
     }
 
-    // Try to find JSON object directly
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
+    // Try to find the most complete JSON object
+    // Use greedy matching to get the longest valid JSON
+    const jsonMatches = text.matchAll(/\{[^\}]*\}/g);
+    const matches = Array.from(jsonMatches);
+
+    // Try parsing from longest to shortest match
+    for (const match of matches.sort((a, b) => b[0].length - a[0].length)) {
       try {
-        return JSON.parse(jsonMatch[0]);
+        const parsed = JSON.parse(match[0]);
+        // Validate it has expected fields
+        if (parsed.category || parsed.summary) {
+          return parsed;
+        }
       } catch (e) {
-        // If parsing failed, fall through
+        // Try next match
+      }
+    }
+
+    // Try to find any JSON-like object with nested braces
+    const nestedMatch = text.match(/\{[\s\S]*\}/);
+    if (nestedMatch) {
+      try {
+        return JSON.parse(nestedMatch[0]);
+      } catch (e) {
+        console.warn('Failed to parse nested JSON:', e.message);
+        console.warn('Text preview:', nestedMatch[0].substring(0, 200));
       }
     }
 
     // Last resort: try to parse the entire text as JSON
-    return JSON.parse(text);
+    try {
+      return JSON.parse(text);
+    } catch (e) {
+      console.error('All JSON extraction methods failed');
+      console.error('Response length:', text.length);
+      console.error('Response preview:', text.substring(0, 300));
+      throw new Error(`Unable to extract valid JSON from AI response: ${e.message}`);
+    }
   }
 
   createFallbackAnalysis(metadata) {
