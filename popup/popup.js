@@ -25,7 +25,7 @@ class PopupManager {
     const analyzeBtn = document.getElementById('analyzeTabsBtn');
     if (analyzeBtn) {
       analyzeBtn.addEventListener('click', () => {
-        this.analyzeTabs();
+        this.analyzeAllTabs();
       });
     }
 
@@ -33,7 +33,7 @@ class PopupManager {
     const duplicatesBtn = document.getElementById('findDuplicatesBtn');
     if (duplicatesBtn) {
       duplicatesBtn.addEventListener('click', () => {
-        this.findDuplicateTabs();
+        this.findDuplicates();
       });
     }
 
