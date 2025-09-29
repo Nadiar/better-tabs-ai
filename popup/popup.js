@@ -3,6 +3,7 @@
 class PopupManager {
     constructor() {
         this.currentSuggestions = []; // Store suggestions for button handlers
+        this.progressInterval = null;
         this.init();
     }
 
@@ -10,6 +11,40 @@ class PopupManager {
         this.setupEventListeners();
         await this.checkAIStatus();
         await this.updateTabStats();
+        await this.checkOngoingAnalysis();
+
+        // Cleanup on popup close
+        window.addEventListener('unload', () => {
+            if (this.progressInterval) {
+                clearInterval(this.progressInterval);
+            }
+        });
+    }
+
+    async checkOngoingAnalysis() {
+        try {
+            const progressResponse = await this.sendMessage({ action: 'getAnalysisProgress' });
+
+            if (progressResponse.inProgress) {
+                // Resume monitoring
+                const button = document.getElementById('analyzeTabsBtn');
+                button.disabled = true;
+                this.startProgressMonitoring();
+            } else if (progressResponse.progress && progressResponse.progress.status === 'complete') {
+                // Show last results
+                const resultsResponse = await this.sendMessage({ action: 'getLastAnalysisResults' });
+
+                if (resultsResponse.results && resultsResponse.timestamp) {
+                    // Only show if less than 5 minutes old
+                    const age = Date.now() - resultsResponse.timestamp;
+                    if (age < 5 * 60 * 1000) {
+                        this.displayResults(resultsResponse.results);
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Error checking ongoing analysis:', error);
+        }
     }
 
   setupEventListeners() {
@@ -118,44 +153,88 @@ class PopupManager {
     async analyzeAllTabs() {
         const button = document.getElementById('analyzeTabsBtn');
         const results = document.getElementById('results');
-        
+
         try {
             // Show loading state
             button.disabled = true;
-            button.textContent = '🤖 Analyzing...';
+            button.textContent = '🤖 Starting...';
             results.style.display = 'none';
 
             const response = await this.sendMessage({ action: 'analyzeAllTabs' });
 
             if (response.error) {
-                if (response.requiresPermission) {
-                    // Handle large number of tabs
-                    const proceed = confirm(
-                        `You have ${response.tabCount} tabs open. This may take a while to analyze. ` +
-                        `Would you like to proceed?`
-                    );
-                    
-                    if (proceed) {
-                        // Retry with permission
-                        const retryResponse = await this.sendMessage({ 
-                            action: 'analyzeAllTabs', 
-                            forceAnalyze: true 
-                        });
-                        this.displayResults(retryResponse);
-                    }
-                } else {
-                    this.showError(response.error);
-                }
+                this.showError(response.error);
+                button.disabled = false;
+                button.textContent = '🤖 Analyze & Group Tabs';
+            } else if (response.started) {
+                // Background analysis started
+                this.showInfo(response.message);
+                this.startProgressMonitoring();
+            } else if (response.message) {
+                // No tabs to analyze
+                this.showInfo(response.message);
+                button.disabled = false;
+                button.textContent = '🤖 Analyze & Group Tabs';
             } else {
+                // Immediate results (shouldn't happen with new implementation)
                 this.displayResults(response);
+                button.disabled = false;
+                button.textContent = '🤖 Analyze & Group Tabs';
             }
         } catch (error) {
             console.error('Error analyzing tabs:', error);
             this.showError(error.message);
-        } finally {
             button.disabled = false;
             button.textContent = '🤖 Analyze & Group Tabs';
         }
+    }
+
+    startProgressMonitoring() {
+        const button = document.getElementById('analyzeTabsBtn');
+        const results = document.getElementById('results');
+
+        // Poll for progress every 500ms
+        this.progressInterval = setInterval(async () => {
+            try {
+                const progressResponse = await this.sendMessage({ action: 'getAnalysisProgress' });
+
+                if (progressResponse.inProgress) {
+                    const progress = progressResponse.progress;
+                    button.textContent = `🤖 Analyzing ${progress.current}/${progress.total}...`;
+                } else if (progressResponse.progress.status === 'complete') {
+                    // Analysis complete, fetch results
+                    clearInterval(this.progressInterval);
+                    const resultsResponse = await this.sendMessage({ action: 'getLastAnalysisResults' });
+
+                    if (resultsResponse.results) {
+                        this.displayResults(resultsResponse.results);
+                    }
+
+                    button.disabled = false;
+                    button.textContent = '🤖 Analyze & Group Tabs';
+                } else if (progressResponse.progress.status === 'error') {
+                    clearInterval(this.progressInterval);
+                    this.showError('Analysis failed. Check console for details.');
+                    button.disabled = false;
+                    button.textContent = '🤖 Analyze & Group Tabs';
+                }
+            } catch (error) {
+                console.error('Error checking progress:', error);
+                clearInterval(this.progressInterval);
+                button.disabled = false;
+                button.textContent = '🤖 Analyze & Group Tabs';
+            }
+        }, 500);
+    }
+
+    showInfo(message) {
+        const results = document.getElementById('results');
+        results.innerHTML = `
+            <div class="result-item" style="background: #e3f2fd; border-left: 4px solid #2196f3;">
+                <strong>ℹ️ ${message}</strong>
+            </div>
+        `;
+        results.style.display = 'block';
     }
 
     async findDuplicates() {

@@ -191,6 +191,8 @@ class BetterTabsAI {
     this.isAIAvailable = false;
     this.aiStatus = AIStatus.UNKNOWN_ERROR;
     this.cacheManager = new CacheManager({ maxSize: 100, defaultTTL: 60000 });
+    this.analysisInProgress = false;
+    this.analysisProgress = { current: 0, total: 0, status: 'idle' };
     this.init();
   }
 
@@ -372,6 +374,21 @@ class BetterTabsAI {
           sendResponse({ stats: this.cacheManager.getStats() });
           break;
 
+        case 'getAnalysisProgress':
+          sendResponse({
+            inProgress: this.analysisInProgress,
+            progress: this.analysisProgress
+          });
+          break;
+
+        case 'getLastAnalysisResults':
+          const stored = await chrome.storage.local.get(['lastAnalysisResults', 'lastAnalysisTime']);
+          sendResponse({
+            results: stored.lastAnalysisResults || null,
+            timestamp: stored.lastAnalysisTime || null
+          });
+          break;
+
         default:
           sendResponse({ error: 'Unknown action' });
       }
@@ -446,65 +463,158 @@ class BetterTabsAI {
     }
   }
 
+  isTabGroupable(tab) {
+    // Filter out tabs that shouldn't be grouped
+    const url = tab.url || '';
+    const title = tab.title || '';
+
+    // Skip special Chrome pages
+    if (url.startsWith('chrome://') ||
+        url.startsWith('chrome-extension://') ||
+        url.startsWith('edge://') ||
+        url.startsWith('about:') ||
+        url.startsWith('file://')) {
+      return false;
+    }
+
+    // Skip empty or new tabs
+    if (!url || url === 'about:blank' || title === 'New Tab') {
+      return false;
+    }
+
+    // Skip already grouped tabs
+    if (tab.groupId !== -1) {
+      return false;
+    }
+
+    return true;
+  }
+
   async analyzeAllTabs() {
     try {
       if (!this.isAIAvailable) {
         return { error: 'AI not available', requiresSetup: true };
       }
 
-      // Get all tabs
-      const tabs = await chrome.tabs.query({});
-      console.log(`Analyzing ${tabs.length} tabs`);
-
-      // Check if we have a large number of tabs
-      if (tabs.length > 50) {
+      // Check if already running
+      if (this.analysisInProgress) {
         return {
-          error: 'Large number of tabs detected',
-          tabCount: tabs.length,
-          requiresPermission: true
+          error: 'Analysis already in progress',
+          progress: this.analysisProgress
         };
       }
 
-      // Filter out already grouped tabs initially
-      const ungroupedTabs = tabs.filter(tab => tab.groupId === -1);
-      console.log(`Found ${ungroupedTabs.length} ungrouped tabs`);
+      // Get all tabs
+      const tabs = await chrome.tabs.query({});
 
-      const results = {
-        totalTabs: tabs.length,
-        ungroupedTabs: ungroupedTabs.length,
-        analyses: [],
-        suggestions: [],
-        cacheStats: this.cacheManager.getStats()
+      // Filter to only groupable tabs
+      const groupableTabs = tabs.filter(tab => this.isTabGroupable(tab));
+      console.log(`Found ${groupableTabs.length} groupable tabs (filtered from ${tabs.length} total)`);
+
+      if (groupableTabs.length === 0) {
+        return {
+          totalTabs: tabs.length,
+          ungroupedTabs: 0,
+          analyses: [],
+          suggestions: [],
+          message: 'No groupable tabs found (filtered out special pages, new tabs, and already grouped tabs)'
+        };
+      }
+
+      // Start background analysis
+      this.analysisInProgress = true;
+      this.analysisProgress = {
+        current: 0,
+        total: groupableTabs.length,
+        status: 'analyzing'
       };
 
-      // Analyze each ungrouped tab
-      for (const tab of ungroupedTabs) {
-        try {
-          const analysis = await this.analyzeTab(tab.id, tab);
-          if (analysis && !analysis.error) {
-            results.analyses.push({
-              tabId: tab.id,
-              ...analysis
-            });
-          }
-        } catch (error) {
-          console.error(`Error analyzing tab ${tab.id}:`, error);
-        }
-      }
+      // Run analysis in background (don't await)
+      this.performBackgroundAnalysis(groupableTabs).catch(error => {
+        console.error('Background analysis failed:', error);
+        this.analysisInProgress = false;
+        this.analysisProgress.status = 'error';
+      });
 
-      // Generate grouping suggestions
-      if (results.analyses.length > 0) {
-        results.suggestions = await this.suggestGroups(results.analyses);
-      }
-
-      // Update cache stats
-      results.cacheStats = this.cacheManager.getStats();
-
-      return results;
+      // Return immediately with status
+      return {
+        started: true,
+        totalTabs: tabs.length,
+        analyzingTabs: groupableTabs.length,
+        message: 'Analysis started in background. Close popup if needed - results will be saved.',
+        progress: this.analysisProgress
+      };
     } catch (error) {
       console.error('Error in analyzeAllTabs:', error);
+      this.analysisInProgress = false;
       return { error: error.message };
     }
+  }
+
+  async performBackgroundAnalysis(tabs) {
+    const results = {
+      totalTabs: tabs.length,
+      analyses: [],
+      suggestions: [],
+      cacheStats: this.cacheManager.getStats()
+    };
+
+    // Process in batches of 5 for better concurrency
+    const BATCH_SIZE = 5;
+    for (let i = 0; i < tabs.length; i += BATCH_SIZE) {
+      const batch = tabs.slice(i, Math.min(i + BATCH_SIZE, tabs.length));
+
+      // Analyze batch concurrently
+      const batchPromises = batch.map(async (tab) => {
+        try {
+          const analysis = await this.analyzeTab(tab.id, tab);
+          if (analysis && !analysis.error && !analysis.fallback) {
+            return {
+              tabId: tab.id,
+              ...analysis
+            };
+          }
+          return null;
+        } catch (error) {
+          console.error(`Error analyzing tab ${tab.id}:`, error);
+          return null;
+        }
+      });
+
+      const batchResults = await Promise.all(batchPromises);
+
+      // Add successful analyses
+      batchResults.forEach(result => {
+        if (result) {
+          results.analyses.push(result);
+        }
+      });
+
+      // Update progress
+      this.analysisProgress.current = Math.min(i + BATCH_SIZE, tabs.length);
+      console.log(`Progress: ${this.analysisProgress.current}/${this.analysisProgress.total}`);
+    }
+
+    // Generate grouping suggestions
+    if (results.analyses.length > 0) {
+      this.analysisProgress.status = 'grouping';
+      results.suggestions = await this.suggestGroups(results.analyses);
+    }
+
+    // Update cache stats
+    results.cacheStats = this.cacheManager.getStats();
+
+    // Store results for popup to retrieve
+    await chrome.storage.local.set({
+      lastAnalysisResults: results,
+      lastAnalysisTime: Date.now()
+    });
+
+    this.analysisInProgress = false;
+    this.analysisProgress.status = 'complete';
+
+    console.log('✅ Background analysis complete:', results);
+    return results;
   }
 
   async analyzeTab(tabId, tabData = null) {
