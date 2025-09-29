@@ -46,30 +46,23 @@ class PopupManager {
     }
   }  async checkAIStatus() {
     try {
-      // Check AI status through service worker only, not directly
-      let aiAvailable = false;
-      let statusMessage = 'Checking...';
-      let detailedStatus = '';
+      // Check AI status through service worker
+      const response = await this.sendMessage({ action: 'checkAIAvailability' });
 
-      try {
-        // Only use service worker check to avoid language specification issues
-        const response = await this.sendMessage({ action: 'checkAIAvailability' });
-        aiAvailable = response.available || false;
-        statusMessage = response.statusMessage || 'Unknown';
-        detailedStatus = response.detailedStatus || 'Check service worker logs';
-        
-        console.log('AI Status from service worker:', response);
-      } catch (error) {
-        console.log('Service worker check failed:', error);
-        aiAvailable = false;
-        statusMessage = 'Service Worker Error';
-        detailedStatus = error.message;
-      }
-      
+      const aiAvailable = response.available || false;
+      const statusMessage = response.statusMessage || 'Unknown';
+      const detailedStatus = response.detailedStatus || '';
+      const action = response.action;
+      const status = response.status || 'unknown-error';
+
+      console.log('AI Status from service worker:', response);
+
       const statusDot = document.getElementById('statusDot');
       const statusText = document.getElementById('statusText');
       const aiNotAvailable = document.getElementById('aiNotAvailable');
       const mainInterface = document.getElementById('mainInterface');
+      const errorDetail = document.getElementById('errorDetail');
+      const errorAction = document.getElementById('errorAction');
 
       if (aiAvailable) {
         statusDot.className = 'status-dot available';
@@ -78,14 +71,26 @@ class PopupManager {
         aiNotAvailable.style.display = 'none';
         mainInterface.style.display = 'block';
       } else {
-        statusDot.className = 'status-dot unavailable';
+        // Set status indicator
+        statusDot.className = `status-dot unavailable status-${status}`;
         statusText.textContent = statusMessage;
         statusText.title = detailedStatus;
+
+        // Update error message details
+        if (errorDetail) {
+          errorDetail.textContent = detailedStatus;
+        }
+
+        // Update action message if provided
+        if (errorAction && action) {
+          errorAction.textContent = action;
+          errorAction.style.display = 'block';
+        } else if (errorAction) {
+          errorAction.style.display = 'none';
+        }
+
         aiNotAvailable.style.display = 'block';
         mainInterface.style.display = 'none';
-        
-        // Log detailed status for debugging
-        console.log('AI Status Details:', detailedStatus);
       }
     } catch (error) {
       console.error('Error checking AI status:', error);

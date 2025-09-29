@@ -129,11 +129,67 @@ class CacheManager {
   }
 }
 
+// AI Status enum and error messages
+const AIStatus = {
+  READY: 'ready',
+  DOWNLOADING: 'downloading',
+  DOWNLOAD_REQUIRED: 'download-required',
+  FLAGS_DISABLED: 'flags-disabled',
+  GPU_UNAVAILABLE: 'gpu-unavailable',
+  STORAGE_FULL: 'storage-full',
+  UNSUPPORTED_BROWSER: 'unsupported-browser',
+  UNKNOWN_ERROR: 'unknown-error'
+};
+
+const AIStatusMessages = {
+  [AIStatus.READY]: {
+    short: 'AI Ready',
+    detail: 'Gemini Nano is ready to use',
+    action: null
+  },
+  [AIStatus.DOWNLOADING]: {
+    short: 'Downloading AI Model',
+    detail: 'Gemini Nano model is being downloaded. This may take several minutes.',
+    action: 'Check progress at chrome://on-device-internals'
+  },
+  [AIStatus.DOWNLOAD_REQUIRED]: {
+    short: 'Download Required',
+    detail: 'Gemini Nano model needs to be downloaded (approximately 22GB)',
+    action: 'Visit chrome://on-device-internals to download'
+  },
+  [AIStatus.FLAGS_DISABLED]: {
+    short: 'Chrome Flags Disabled',
+    detail: 'Prompt API for Gemini Nano is not enabled in Chrome flags',
+    action: 'Enable at chrome://flags/#prompt-api-for-gemini-nano'
+  },
+  [AIStatus.GPU_UNAVAILABLE]: {
+    short: 'GPU Not Available',
+    detail: 'Gemini Nano requires at least 4GB GPU memory',
+    action: 'Check system requirements'
+  },
+  [AIStatus.STORAGE_FULL]: {
+    short: 'Insufficient Storage',
+    detail: 'Need at least 22GB free storage for Gemini Nano model',
+    action: 'Free up disk space'
+  },
+  [AIStatus.UNSUPPORTED_BROWSER]: {
+    short: 'Unsupported Browser',
+    detail: 'Requires Chrome 118+ with AI features',
+    action: 'Update Chrome to latest version'
+  },
+  [AIStatus.UNKNOWN_ERROR]: {
+    short: 'Unknown Error',
+    detail: 'Unable to determine AI availability',
+    action: 'Check console for details'
+  }
+};
+
 class BetterTabsAI {
   constructor() {
     this.session = null;
     this.sessionCreated = false;
     this.isAIAvailable = false;
+    this.aiStatus = AIStatus.UNKNOWN_ERROR;
     this.cacheManager = new CacheManager({ maxSize: 100, defaultTTL: 60000 });
     this.init();
   }
@@ -162,49 +218,83 @@ class BetterTabsAI {
         try {
           const availability = await self.ai.languageModel.availability();
           console.log('AI Availability:', availability);
-          
+
           if (availability === 'readily-available') {
             this.isAIAvailable = true;
+            this.aiStatus = AIStatus.READY;
             console.log('✅ Gemini Nano is ready to use');
           } else if (availability === 'after-download') {
             this.isAIAvailable = false;
+            this.aiStatus = AIStatus.DOWNLOAD_REQUIRED;
             console.log('🟡 Gemini Nano needs to be downloaded');
+          } else if (availability === 'downloading') {
+            this.isAIAvailable = false;
+            this.aiStatus = AIStatus.DOWNLOADING;
+            console.log('⏳ Gemini Nano is downloading');
           } else {
             this.isAIAvailable = false;
+            this.aiStatus = AIStatus.UNKNOWN_ERROR;
             console.log('❌ Gemini Nano not available:', availability);
           }
         } catch (error) {
           console.log('Error checking ai.languageModel availability:', error);
           this.isAIAvailable = false;
+          this._interpretError(error);
         }
       } else if (typeof LanguageModel !== 'undefined') {
         console.log('Found LanguageModel API');
         try {
           const availability = await LanguageModel.availability();
           console.log('AI Availability:', availability);
-          
+
           if (availability === 'available') {
             this.isAIAvailable = true;
+            this.aiStatus = AIStatus.READY;
             console.log('✅ Gemini Nano is ready to use');
-          } else if (availability === 'downloadable' || availability === 'downloading') {
+          } else if (availability === 'downloadable') {
             this.isAIAvailable = false;
-            console.log('🟡 Gemini Nano needs download:', availability);
+            this.aiStatus = AIStatus.DOWNLOAD_REQUIRED;
+            console.log('🟡 Gemini Nano needs download');
+          } else if (availability === 'downloading') {
+            this.isAIAvailable = false;
+            this.aiStatus = AIStatus.DOWNLOADING;
+            console.log('⏳ Gemini Nano is downloading');
           } else {
             this.isAIAvailable = false;
+            this.aiStatus = AIStatus.UNKNOWN_ERROR;
             console.log('❌ Gemini Nano not available:', availability);
           }
         } catch (error) {
           console.log('Error checking LanguageModel availability:', error);
           this.isAIAvailable = false;
+          this._interpretError(error);
         }
       } else {
         console.log('❌ No AI APIs found');
         console.log('Available globals:', Object.keys(self).filter(k => k.toLowerCase().includes('ai') || k.toLowerCase().includes('language')));
         this.isAIAvailable = false;
+        this.aiStatus = AIStatus.FLAGS_DISABLED;
       }
     } catch (error) {
       console.error('Error checking AI availability:', error);
       this.isAIAvailable = false;
+      this._interpretError(error);
+    }
+  }
+
+  _interpretError(error) {
+    const errorMsg = error.message?.toLowerCase() || '';
+
+    if (errorMsg.includes('gpu') || errorMsg.includes('graphics')) {
+      this.aiStatus = AIStatus.GPU_UNAVAILABLE;
+    } else if (errorMsg.includes('storage') || errorMsg.includes('disk') || errorMsg.includes('space')) {
+      this.aiStatus = AIStatus.STORAGE_FULL;
+    } else if (errorMsg.includes('flag') || errorMsg.includes('disabled')) {
+      this.aiStatus = AIStatus.FLAGS_DISABLED;
+    } else if (errorMsg.includes('version') || errorMsg.includes('browser')) {
+      this.aiStatus = AIStatus.UNSUPPORTED_BROWSER;
+    } else {
+      this.aiStatus = AIStatus.UNKNOWN_ERROR;
     }
   }
 
@@ -237,7 +327,14 @@ class BetterTabsAI {
       switch (message.action) {
         case 'checkAIAvailability':
           await this.checkAIAvailability();
-          sendResponse({ available: this.isAIAvailable });
+          const statusInfo = AIStatusMessages[this.aiStatus];
+          sendResponse({
+            available: this.isAIAvailable,
+            status: this.aiStatus,
+            statusMessage: statusInfo.short,
+            detailedStatus: statusInfo.detail,
+            action: statusInfo.action
+          });
           break;
 
         case 'analyzeAllTabs':
