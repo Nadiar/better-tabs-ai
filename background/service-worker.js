@@ -1111,20 +1111,43 @@ Provide a JSON response with this exact structure:
     try {
       console.log('Creating groups:', groupSuggestions);
       const results = [];
-      
+
       for (const suggestion of groupSuggestions) {
         try {
           console.log('Processing suggestion:', suggestion);
           console.log('Tabs in suggestion:', suggestion.tabs);
-          
-          // Extract tab IDs
-          const tabIds = suggestion.tabs.map(tab => {
-            console.log('Processing tab:', tab, 'tabId:', tab.tabId);
-            return tab.tabId;
-          });
-          
+
+          // Extract tab IDs and verify they still exist
+          const tabIds = [];
+          for (const tab of suggestion.tabs) {
+            try {
+              // Verify tab still exists
+              const currentTab = await chrome.tabs.get(tab.tabId);
+
+              // Only include tabs that are currently ungrouped
+              // to avoid accidentally removing tabs from existing groups
+              if (currentTab.groupId === -1) {
+                tabIds.push(tab.tabId);
+              } else {
+                console.log(`⚠️ Skipping tab ${tab.tabId} - already in group ${currentTab.groupId}`);
+              }
+            } catch (error) {
+              console.warn(`Tab ${tab.tabId} no longer exists, skipping`);
+            }
+          }
+
+          if (tabIds.length === 0) {
+            console.log(`⚠️ No ungrouped tabs available for group "${suggestion.groupName}"`);
+            results.push({
+              name: suggestion.groupName,
+              error: 'No ungrouped tabs available',
+              success: false
+            });
+            continue;
+          }
+
           console.log('Creating group with tab IDs:', tabIds);
-          
+
           // Create the tab group
           const group = await chrome.tabs.group({
             tabIds: tabIds
@@ -1142,11 +1165,11 @@ Provide a JSON response with this exact structure:
           results.push({
             groupId: group,
             name: suggestion.groupName,
-            tabCount: suggestion.tabs.length,
+            tabCount: tabIds.length,
             success: true
           });
 
-          console.log(`Created group "${suggestion.groupName}" with ${suggestion.tabs.length} tabs`);
+          console.log(`✅ Created group "${suggestion.groupName}" with ${tabIds.length} tabs`);
         } catch (error) {
           console.error(`Error creating group "${suggestion.groupName}":`, error);
           results.push({
