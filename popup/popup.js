@@ -4,6 +4,7 @@ class PopupManager {
     constructor() {
         this.currentSuggestions = []; // Store suggestions for button handlers
         this.progressInterval = null;
+        this.lastAnalysisClick = 0;
         this.init();
     }
 
@@ -163,15 +164,30 @@ class PopupManager {
         const results = document.getElementById('results');
 
         try {
+            // Check if double-click (within 5 seconds) to force refresh
+            const now = Date.now();
+            const timeSinceLastClick = now - this.lastAnalysisClick;
+            const forceRefresh = timeSinceLastClick < 5000;
+            this.lastAnalysisClick = now;
+
             // Show loading state
             button.disabled = true;
-            button.textContent = '🤖 Starting...';
+            button.textContent = forceRefresh ? '🔄 Refreshing...' : '🤖 Starting...';
             results.style.display = 'none';
 
-            const response = await this.sendMessage({ action: 'analyzeAllTabs' });
+            const response = await this.sendMessage({
+                action: 'analyzeAllTabs',
+                forceRefresh: forceRefresh
+            });
 
             if (response.error) {
                 this.showError(response.error);
+                button.disabled = false;
+                button.textContent = '🤖 Analyze & Group Tabs';
+            } else if (response.cached) {
+                // Using cached results
+                this.displayResults(response);
+                this.showInfo(response.message + ' (Click again to force refresh)');
                 button.disabled = false;
                 button.textContent = '🤖 Analyze & Group Tabs';
             } else if (response.started) {
@@ -184,7 +200,7 @@ class PopupManager {
                 button.disabled = false;
                 button.textContent = '🤖 Analyze & Group Tabs';
             } else {
-                // Immediate results (shouldn't happen with new implementation)
+                // Immediate results
                 this.displayResults(response);
                 button.disabled = false;
                 button.textContent = '🤖 Analyze & Group Tabs';

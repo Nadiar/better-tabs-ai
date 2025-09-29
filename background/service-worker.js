@@ -340,7 +340,7 @@ class BetterTabsAI {
           break;
 
         case 'analyzeAllTabs':
-          const result = await this.analyzeAllTabs();
+          const result = await this.analyzeAllTabs(message.forceRefresh || false);
           sendResponse(result);
           break;
 
@@ -490,7 +490,7 @@ class BetterTabsAI {
     return true;
   }
 
-  async analyzeAllTabs() {
+  async analyzeAllTabs(forceRefresh = false) {
     try {
       if (!this.isAIAvailable) {
         return { error: 'AI not available', requiresSetup: true };
@@ -519,6 +519,30 @@ class BetterTabsAI {
           suggestions: [],
           message: 'No groupable tabs found (filtered out special pages, new tabs, and already grouped tabs)'
         };
+      }
+
+      // Check for recent cached results unless force refresh
+      if (!forceRefresh) {
+        const stored = await chrome.storage.local.get(['lastAnalysisResults', 'lastAnalysisTime', 'lastAnalysisTabCount']);
+        if (stored.lastAnalysisResults && stored.lastAnalysisTime) {
+          const age = Date.now() - stored.lastAnalysisTime;
+          const tabCountChanged = stored.lastAnalysisTabCount !== groupableTabs.length;
+
+          // Use cached results if less than 2 minutes old and tab count unchanged
+          if (age < 2 * 60 * 1000 && !tabCountChanged) {
+            console.log('✅ Using cached analysis results (age:', Math.round(age / 1000), 'seconds)');
+            return {
+              ...stored.lastAnalysisResults,
+              cached: true,
+              cacheAge: age,
+              message: `Using recent analysis from ${Math.round(age / 1000)}s ago`
+            };
+          } else if (tabCountChanged) {
+            console.log('🔄 Tab count changed, refreshing analysis');
+          } else {
+            console.log('🔄 Cached results too old, refreshing analysis');
+          }
+        }
       }
 
       // Start background analysis
@@ -618,7 +642,8 @@ class BetterTabsAI {
     // Store results for popup to retrieve
     await chrome.storage.local.set({
       lastAnalysisResults: results,
-      lastAnalysisTime: Date.now()
+      lastAnalysisTime: Date.now(),
+      lastAnalysisTabCount: tabs.length
     });
 
     this.analysisInProgress = false;
