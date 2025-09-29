@@ -636,7 +636,9 @@ Examples of good specific categories:
 - "React Development" for React-related pages
 - "Tech News" for technology news articles
 
-Based on this information, provide a JSON response with:
+IMPORTANT: Respond with ONLY the raw JSON object, without any markdown formatting, code blocks, or explanatory text.
+
+Provide a JSON response with this exact structure:
 {
   "category": "specific descriptive category that would be useful for tab grouping",
   "subcategory": "even more specific if needed",
@@ -650,9 +652,9 @@ Based on this information, provide a JSON response with:
       const response = await this.aiSession.prompt(prompt);
       console.log('Received AI response:', response.substring(0, 100) + '...');
 
-      // Parse the response
+      // Parse the response (handle markdown code blocks)
       try {
-        const parsed = JSON.parse(response);
+        const parsed = this.extractJSON(response);
         return {
           ...parsed,
           domain: metadata.domain,
@@ -682,6 +684,34 @@ Based on this information, provide a JSON response with:
 
       return this.createFallbackAnalysis(metadata);
     }
+  }
+
+  extractJSON(text) {
+    // Handle markdown code blocks that wrap JSON
+    // Common patterns: ```json\n{...}\n``` or ```\n{...}\n``` or just {...}
+
+    // First try to extract from markdown code blocks
+    const codeBlockMatch = text.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
+    if (codeBlockMatch) {
+      try {
+        return JSON.parse(codeBlockMatch[1].trim());
+      } catch (e) {
+        // If extraction failed, fall through to other methods
+      }
+    }
+
+    // Try to find JSON object directly
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      try {
+        return JSON.parse(jsonMatch[0]);
+      } catch (e) {
+        // If parsing failed, fall through
+      }
+    }
+
+    // Last resort: try to parse the entire text as JSON
+    return JSON.parse(text);
   }
 
   createFallbackAnalysis(metadata) {
