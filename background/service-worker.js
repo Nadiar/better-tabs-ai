@@ -364,30 +364,24 @@ class BetterTabsAI {
 
   async performAIAnalysis(metadata, content) {
     try {
-      // Don't try to inject into chrome:// or other special URLs
-      if (metadata.url.startsWith('chrome://') || 
-          metadata.url.startsWith('chrome-extension://') ||
-          metadata.url.startsWith('edge://') ||
-          metadata.url.startsWith('about:')) {
-        console.log('Skipping AI analysis for special URL:', metadata.url);
+      // Ensure we have an AI session
+      if (!this.aiSession) {
+        console.log('No AI session available, attempting to create one...');
+        try {
+          await this.createAISession();
+        } catch (error) {
+          console.error('Failed to create AI session:', error);
+          return this.createFallbackAnalysis(metadata);
+        }
+      }
+
+      // If still no session, use fallback
+      if (!this.aiSession) {
+        console.log('AI session unavailable, using fallback analysis');
         return this.createFallbackAnalysis(metadata);
       }
 
-      // Perform AI analysis in a tab context since service workers can't access window.ai
-      const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-      if (tabs.length === 0) {
-        throw new Error('No active tab for AI analysis');
-      }
-
-      // Make sure the active tab is not a special URL either
-      if (tabs[0].url.startsWith('chrome://') || 
-          tabs[0].url.startsWith('chrome-extension://') ||
-          tabs[0].url.startsWith('edge://') ||
-          tabs[0].url.startsWith('about:')) {
-        console.log('Active tab is special URL, using fallback analysis');
-        return this.createFallbackAnalysis(metadata);
-      }
-
+      // Build the analysis prompt
       const prompt = `Analyze this web page and categorize it with specific, granular groupings:
 
 Title: ${metadata.title}
@@ -422,64 +416,41 @@ Based on this information, provide a JSON response with:
   "confidence": 0.8
 }`;
 
-      // Execute AI prompt in tab context
-      const result = await chrome.scripting.executeScript({
-        target: { tabId: tabs[0].id },
-        function: async (promptText) => {
-          try {
-            if (typeof window.ai === 'undefined' || !window.ai.languageModel) {
-              return { error: 'Chrome AI not available' };
-            }
+      // Use the persistent service worker AI session
+      console.log('Sending prompt to AI session...');
+      const response = await this.aiSession.prompt(prompt);
+      console.log('Received AI response:', response.substring(0, 100) + '...');
 
-            // Check availability
-            const availability = await window.ai.languageModel.availability();
-            if (availability !== 'readily-available' && availability !== 'available') {
-              // If downloadable, try to create session anyway to trigger download
-              if (availability !== 'downloadable') {
-                return { error: 'AI not ready', availability };
-              }
-            }
-
-            // Create session for this analysis with language specification
-            const session = await window.ai.languageModel.create({
-              expectedInputs: [{ type: "text", languages: ["en"] }],
-              expectedOutputs: [{ type: "text", languages: ["en"] }]
-            });
-            const response = await session.prompt(promptText);
-            
-            return { success: true, response };
-          } catch (error) {
-            return { error: error.message };
-          }
-        },
-        args: [prompt]
-      });
-
-      const aiResult = result[0]?.result;
-      
-      if (aiResult?.error) {
-        console.error('AI analysis error:', aiResult.error);
+      // Parse the response
+      try {
+        const parsed = JSON.parse(response);
+        return {
+          ...parsed,
+          domain: metadata.domain,
+          title: metadata.title,
+          url: metadata.url
+        };
+      } catch (parseError) {
+        console.error('Error parsing AI response:', parseError);
+        console.error('Raw response:', response);
         return this.createFallbackAnalysis(metadata);
       }
+    } catch (error) {
+      console.error('Error in AI analysis:', error);
 
-      if (aiResult?.success) {
+      // If session was destroyed or became invalid, try to recreate it once
+      if (error.message?.includes('session') || error.message?.includes('Session')) {
+        console.log('AI session may be invalid, attempting to recreate...');
+        this.aiSession = null;
         try {
-          const parsed = JSON.parse(aiResult.response);
-          return {
-            ...parsed,
-            domain: metadata.domain,
-            title: metadata.title,
-            url: metadata.url
-          };
-        } catch (parseError) {
-          console.error('Error parsing AI response:', parseError);
-          return this.createFallbackAnalysis(metadata);
+          await this.createAISession();
+          // Retry the analysis once with new session
+          return await this.performAIAnalysis(metadata, content);
+        } catch (recreateError) {
+          console.error('Failed to recreate session:', recreateError);
         }
       }
 
-      return this.createFallbackAnalysis(metadata);
-    } catch (error) {
-      console.error('Error in AI analysis:', error);
       return this.createFallbackAnalysis(metadata);
     }
   }
