@@ -161,9 +161,9 @@ function Layout() {
   // Memoize columns to prevent unnecessary re-renders during drag
   const memoizedColumns = useMemo(() => ({
     ungrouped: <UngroupedColumn tabs={stagedState.tabs} />,
-    groups: <GroupsColumn groups={stagedState.groups} tabs={stagedState.tabs} />,
+    groups: <GroupsColumn groups={stagedState.groups} tabs={stagedState.tabs} suggestions={suggestions} />,
     newGroup: <NewGroupBox />
-  }), [stagedState.tabs, stagedState.groups]);
+  }), [stagedState.tabs, stagedState.groups, suggestions]);
 
   return (
     <DndContext

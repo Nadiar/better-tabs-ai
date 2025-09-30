@@ -70,6 +70,17 @@ function App() {
       }
     };
 
+    // Handle suggestion dismissal
+    const handleDismissSuggestion = (event) => {
+      const { index } = event.detail;
+      setSuggestions(prev => {
+        if (!prev) return prev;
+        const updated = [...prev];
+        updated.splice(index, 1);
+        return updated.length > 0 ? updated : null;
+      });
+    };
+
     // Listen to Chrome tab/group events
     chrome.tabs.onCreated.addListener(handleTabUpdate);
     chrome.tabs.onRemoved.addListener(handleTabUpdate);
@@ -77,6 +88,9 @@ function App() {
     chrome.tabGroups.onCreated.addListener(handleTabUpdate);
     chrome.tabGroups.onRemoved.addListener(handleTabUpdate);
     chrome.tabGroups.onUpdated.addListener(handleTabUpdate);
+
+    // Listen to custom events
+    window.addEventListener('dismissSuggestion', handleDismissSuggestion);
 
     // Cleanup listeners
     return () => {
@@ -86,6 +100,7 @@ function App() {
       chrome.tabGroups.onCreated.removeListener(handleTabUpdate);
       chrome.tabGroups.onRemoved.removeListener(handleTabUpdate);
       chrome.tabGroups.onUpdated.removeListener(handleTabUpdate);
+      window.removeEventListener('dismissSuggestion', handleDismissSuggestion);
     };
   }, []); // Remove hasChanges dependency to avoid recreating listeners
 

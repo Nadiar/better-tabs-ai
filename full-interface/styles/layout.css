@@ -129,7 +129,7 @@
   text-overflow: ellipsis;
 }
 
-.tab-domain {
+.tab-domain, .tab-url {
   font-size: 0.75rem;
   color: var(--text-secondary);
   white-space: nowrap;
@@ -225,6 +225,62 @@
   font-size: 0.625rem;
   font-weight: 600;
   flex-shrink: 0;
+}
+
+.suggestions-badge {
+  background: var(--info-color);
+  color: white;
+  padding: 0.25rem 0.625rem;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  margin-left: 0.5rem;
+}
+
+/* Suggestion Action Buttons */
+.btn-suggestion {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 6px;
+  font-size: 1rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.btn-suggestion.create {
+  background: var(--success-color);
+  color: white;
+}
+
+.btn-suggestion.create:hover {
+  background: #0d9668;
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+.btn-suggestion.dismiss {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+}
+
+.btn-suggestion.dismiss:hover {
+  background: var(--error-color);
+  color: white;
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Suggested tab styling */
+.tab-card.suggested-tab {
+  background: white;
+  opacity: 0.9;
+  border-style: solid;
 }
 
 .group-actions {

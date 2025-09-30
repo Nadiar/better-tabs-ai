@@ -1,6 +1,6 @@
 # Full Drag & Drop Interface - Implementation Plan
 
-**Status**: 🚧 Phase 4 Complete - Phases 1-4 Implemented
+**Status**: 🚧 Phase 5 Complete - Phases 1-5 Implemented
 
 ## Implementation Progress
 
@@ -34,7 +34,16 @@
   - Inline title editing with 50 char limit
   - Working delete that ungroups tabs
 
-- 🔜 **Phase 5: AI Suggestions Inline** - Pending
+- ✅ **Phase 5: AI Suggestions Inline** - Complete
+  - Display AI suggestions inline with existing groups
+  - Visual distinction (dashed borders, "Suggested" badge)
+  - Confidence percentage display
+  - Create button (✓) to instantly create suggested group
+  - Dismiss button (✗) to remove suggestion
+  - Suggestions counter badge in column header
+  - Auto-remove suggestions when created or dismissed
+  - Custom event system for suggestion management
+
 - 🔜 **Phase 6: Search, Filter & Duplicates** - Pending
 - 🔜 **Phase 7: Undo/Redo & Polish** - Pending
 - 🔜 **Phase 8: Performance & Optimization** - Pending
