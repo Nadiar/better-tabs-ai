@@ -1,3 +1,5 @@
+import React from 'react';
+
 // New Group Box - Right column drop target for creating new groups
 function NewGroupBox() {
   return (
@@ -20,3 +22,5 @@ function NewGroupBox() {
     </div>
   );
 }
+
+export default NewGroupBox;

@@ -487,7 +487,7 @@ class PopupManager {
 
     openFullInterface() {
         chrome.tabs.create({
-            url: chrome.runtime.getURL('full-interface/index.html')
+            url: chrome.runtime.getURL('full-interface/dist/index.html')
         });
         window.close();
     }

@@ -1,3 +1,5 @@
+import React from 'react';
+
 // Toast Notification Component
 const { useState, useEffect } = React;
 
@@ -43,3 +45,5 @@ function ToastContainer({ toasts, removeToast }) {
     </div>
   );
 }
+
+export default Toast;

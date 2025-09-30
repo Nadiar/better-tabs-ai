@@ -1,3 +1,7 @@
+import React from 'react';
+import GroupContainer from './GroupContainer';
+
+
 // Groups Column - Center column showing existing groups
 function GroupsColumn({ groups, tabs }) {
   return (
@@ -26,3 +30,5 @@ function GroupsColumn({ groups, tabs }) {
     </div>
   );
 }
+
+export default GroupsColumn;

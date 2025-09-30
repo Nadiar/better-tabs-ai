@@ -1,3 +1,5 @@
+import React from 'react';
+
 // Conflict Banner - Shows when Chrome tabs change during editing
 function ConflictBanner({ onRefresh, onIgnore }) {
   return (
@@ -17,3 +19,5 @@ function ConflictBanner({ onRefresh, onIgnore }) {
     </div>
   );
 }
+
+export default ConflictBanner;

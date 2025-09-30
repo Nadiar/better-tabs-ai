@@ -1,3 +1,5 @@
+import React from 'react';
+
 // Header Component with Apply/Cancel buttons
 function Header({ hasChanges, onApply, onCancel, isApplying }) {
   return (
@@ -35,3 +37,5 @@ function Header({ hasChanges, onApply, onCancel, isApplying }) {
     </header>
   );
 }
+
+export default Header;

@@ -4,46 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Better Tabs AI - Full Interface</title>
-
-    <!-- Styles -->
-    <link rel="stylesheet" href="styles/main.css">
-    <link rel="stylesheet" href="styles/layout.css">
-    <link rel="stylesheet" href="styles/drag-drop.css">
-    <link rel="stylesheet" href="styles/animations.css">
-
-    <!-- React 18 from local files (no CDN for CSP compliance) -->
-    <script src="lib/react.production.min.js"></script>
-    <script src="lib/react-dom.production.min.js"></script>
-
-    <!-- HTM for JSX-like syntax without build step -->
-    <script src="lib/htm.js"></script>
-    <script>
-      // Setup HTM with React - use html`` template literals instead of JSX
-      const html = htm.bind(React.createElement);
-    </script>
 </head>
 <body>
     <div id="root"></div>
-
-    <!-- Utility modules (plain JS) -->
-    <script src="utils/chrome-api.js"></script>
-    <script src="utils/diff-calculator.js"></script>
-    <script src="utils/batch-applier.js"></script>
-
-    <!-- Components (plain JS, no JSX) -->
-    <script src="components/ErrorBoundary.js"></script>
-    <script src="components/LoadingState.js"></script>
-    <script src="components/Toast.js"></script>
-    <script src="components/ConflictBanner.js"></script>
-    <script src="components/Header.js"></script>
-    <script src="components/TabCard.js"></script>
-    <script src="components/UngroupedColumn.js"></script>
-    <script src="components/GroupContainer.js"></script>
-    <script src="components/GroupsColumn.js"></script>
-    <script src="components/NewGroupBox.js"></script>
-    <script src="components/Layout.js"></script>
-
-    <!-- Main App -->
-    <script src="app.js"></script>
+    <script type="module" src="/app.jsx"></script>
 </body>
 </html>

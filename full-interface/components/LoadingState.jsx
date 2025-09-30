@@ -1,3 +1,5 @@
+import React from 'react';
+
 // Loading State Component with Skeleton Placeholders
 const { useMemo } = React;
 
@@ -39,3 +41,5 @@ function LoadingState() {
     </div>
   );
 }
+
+export default LoadingState;

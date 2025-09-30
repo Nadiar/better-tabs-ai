@@ -1,10 +1,15 @@
 // Better Tabs AI - Full Interface Main App
-const { useState, useEffect, createContext, useContext } = React;
+import React, { useState, useEffect, createContext, useContext } from 'react';
+import ReactDOM from 'react-dom/client';
+import ErrorBoundary from './components/ErrorBoundary';
+import LoadingState from './components/LoadingState';
+import Layout from './components/Layout';
+import "./styles/main.css";import "./styles/layout.css";import "./styles/drag-drop.css";import "./styles/animations.css";
 
 // Staged State Context - Provides staged state to all components
 const StagedStateContext = createContext(null);
 
-window.useStagedStateContext = () => {
+export const useStagedStateContext = () => {
   const context = useContext(StagedStateContext);
   if (!context) {
     throw new Error('useStagedStateContext must be used within StagedStateProvider');
@@ -94,24 +99,24 @@ function App() {
   };
 
   if (error) {
-    return html`
+    return (
       <div className="error-container">
         <h2>Error Loading Tabs</h2>
-        <p>${error}</p>
-        <button onClick=${loadChromeData}>Retry</button>
+        <p>{error}</p>
+        <button onClick={loadChromeData}>Retry</button>
       </div>
-    `;
+    );
   }
 
-  return html`
-    <${ErrorBoundary}>
-      <${StagedStateContext.Provider} value=${contextValue}>
-        ${isLoading ? html`<${LoadingState} />` : html`<${Layout} />`}
-      </${StagedStateContext.Provider}>
-    </${ErrorBoundary}>
-  `;
+  return (
+    <ErrorBoundary>
+      <StagedStateContext.Provider value={contextValue}>
+        {isLoading ? <LoadingState /> : <Layout />}
+      </StagedStateContext.Provider>
+    </ErrorBoundary>
+  );
 }
 
 // Render app
 const root = ReactDOM.createRoot(document.getElementById('root'));
-root.render(html`<${App} />`);
+root.render(<App />);

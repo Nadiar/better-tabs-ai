@@ -1,3 +1,7 @@
+import React from 'react';
+import TabCard from './TabCard';
+
+
 // Ungrouped Tabs Column - Left column showing tabs without groups
 function UngroupedColumn({ tabs }) {
   const ungroupedTabs = tabs.filter(tab => tab.groupId === -1);
@@ -26,3 +30,5 @@ function UngroupedColumn({ tabs }) {
     </div>
   );
 }
+
+export default UngroupedColumn;

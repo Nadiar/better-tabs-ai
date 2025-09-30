@@ -1,3 +1,5 @@
+import React from 'react';
+
 // Tab Card Component - Displays individual tab (will be draggable in Phase 2)
 function TabCard({ tab, isSelected, isDuplicate, onSelect }) {
   const getFaviconUrl = (tab) => {
@@ -42,3 +44,5 @@ function TabCard({ tab, isSelected, isDuplicate, onSelect }) {
     </div>
   );
 }
+
+export default TabCard;

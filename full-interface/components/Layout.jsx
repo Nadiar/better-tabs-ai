@@ -1,3 +1,12 @@
+import React from 'react';
+import { useStagedStateContext } from '../app';
+import Header from './Header';
+import ConflictBanner from './ConflictBanner';
+import UngroupedColumn from './UngroupedColumn';
+import GroupsColumn from './GroupsColumn';
+import NewGroupBox from './NewGroupBox';
+
+
 // Layout Component - Main 3-column layout
 function Layout() {
   const { stagedState, hasChanges, showConflictBanner, resetToOriginal, applyChanges, refreshFromChrome } = useStagedStateContext();
@@ -61,3 +70,5 @@ function Layout() {
     </div>
   );
 }
+
+export default Layout;

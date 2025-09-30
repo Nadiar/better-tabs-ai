@@ -1,3 +1,7 @@
+import React from 'react';
+import TabCard from './TabCard';
+
+
 // Group Container - Displays a tab group with its tabs
 function GroupContainer({ group, tabs, isSuggested = false, confidence = null }) {
   const groupTabs = tabs.filter(tab => tab.groupId === group.id);
@@ -57,3 +61,5 @@ function GroupContainer({ group, tabs, isSuggested = false, confidence = null })
     </div>
   );
 }
+
+export default GroupContainer;
