@@ -92,6 +92,14 @@ class PopupManager {
         this.copyDebugInfo();
       });
     }
+
+    // Full interface button
+    const fullInterfaceBtn = document.getElementById('openFullInterface');
+    if (fullInterfaceBtn) {
+      fullInterfaceBtn.addEventListener('click', () => {
+        this.openFullInterface();
+      });
+    }
   }  async checkAIStatus(retryCount = 0) {
     try {
       // Check AI status through service worker
@@ -478,12 +486,10 @@ class PopupManager {
     }
 
     openFullInterface() {
-        // TODO: Implement full-page interface
-        alert('Full interface coming soon! This will provide drag-and-drop tab management.');
-        // chrome.tabs.create({
-        //     url: chrome.runtime.getURL('full-interface/index.html')
-        // });
-        // window.close();
+        chrome.tabs.create({
+            url: chrome.runtime.getURL('full-interface/index.html')
+        });
+        window.close();
     }
 
     openSettings() {

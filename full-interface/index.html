@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Better Tabs AI - Full Interface</title>
+
+    <!-- Styles -->
+    <link rel="stylesheet" href="styles/main.css">
+    <link rel="stylesheet" href="styles/layout.css">
+    <link rel="stylesheet" href="styles/drag-drop.css">
+    <link rel="stylesheet" href="styles/animations.css">
+
+    <!-- React 18 from CDN -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+
+    <!-- Babel Standalone for JSX transformation -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body>
+    <div id="root"></div>
+
+    <!-- Utility modules -->
+    <script type="text/babel" src="utils/chrome-api.js"></script>
+    <script type="text/babel" src="utils/diff-calculator.js"></script>
+    <script type="text/babel" src="utils/batch-applier.js"></script>
+
+    <!-- Hooks -->
+    <script type="text/babel" src="hooks/useStagedState.js"></script>
+    <script type="text/babel" src="hooks/useChromeTabs.js"></script>
+    <script type="text/babel" src="hooks/useChromeGroups.js"></script>
+
+    <!-- Components -->
+    <script type="text/babel" src="components/ErrorBoundary.jsx"></script>
+    <script type="text/babel" src="components/LoadingState.jsx"></script>
+    <script type="text/babel" src="components/Toast.jsx"></script>
+    <script type="text/babel" src="components/ConflictBanner.jsx"></script>
+    <script type="text/babel" src="components/Header.jsx"></script>
+    <script type="text/babel" src="components/TabCard.jsx"></script>
+    <script type="text/babel" src="components/UngroupedColumn.jsx"></script>
+    <script type="text/babel" src="components/GroupContainer.jsx"></script>
+    <script type="text/babel" src="components/GroupsColumn.jsx"></script>
+    <script type="text/babel" src="components/NewGroupBox.jsx"></script>
+    <script type="text/babel" src="components/Layout.jsx"></script>
+
+    <!-- Main App -->
+    <script type="text/babel" src="app.jsx"></script>
+</body>
+</html>

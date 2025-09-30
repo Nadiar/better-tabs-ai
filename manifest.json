@@ -42,7 +42,7 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["utils/*.js"],
+      "resources": ["utils/*.js", "full-interface/*"],
       "matches": ["<all_urls>"]
     }
   ]

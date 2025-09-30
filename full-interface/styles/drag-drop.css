@@ -1,0 +1,43 @@
+/* Drag & Drop Styles - Phase 2 */
+
+/* Placeholder for drag & drop styles */
+/* Will be populated in Phase 2 with:
+ * - Dragging state (opacity 0.5, scale 0.95, shadow)
+ * - Drop zone highlighting (colored border + overlay)
+ * - Drag handle
+ * - Drag preview
+ */
+
+/* Dragging State (to be implemented) */
+.tab-card.dragging {
+  opacity: 0.5;
+  transform: scale(0.95);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+  cursor: grabbing;
+}
+
+.tab-card.drag-over {
+  border-color: var(--success-color);
+  background: rgba(16, 185, 129, 0.05);
+}
+
+.group-container.drag-over {
+  border-color: var(--success-color);
+  background: rgba(16, 185, 129, 0.05);
+}
+
+.group-container.drag-over::after {
+  content: 'Drop here';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: var(--success-color);
+  color: white;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  pointer-events: none;
+  z-index: 10;
+}
