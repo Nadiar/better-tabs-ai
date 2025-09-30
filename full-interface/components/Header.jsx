@@ -1,7 +1,7 @@
 import React from 'react';
 
-// Header Component with Apply/Cancel buttons
-function Header({ hasChanges, onApply, onCancel, isApplying }) {
+// Header Component with Apply/Cancel/Analyze buttons
+function Header({ hasChanges, onApply, onCancel, onAnalyze, isApplying, isAnalyzing }) {
   const logoUrl = chrome.runtime.getURL('icons/icon32.png');
 
   return (
@@ -21,6 +21,14 @@ function Header({ hasChanges, onApply, onCancel, isApplying }) {
       </div>
 
       <div className="header-right">
+        <button
+          className="btn-secondary"
+          onClick={onAnalyze}
+          disabled={isApplying || isAnalyzing}
+          title="Analyze tabs and generate AI grouping suggestions"
+        >
+          {isAnalyzing ? '🤖 Analyzing...' : '🤖 Analyze'}
+        </button>
         <button
           className="btn-secondary"
           onClick={onCancel}

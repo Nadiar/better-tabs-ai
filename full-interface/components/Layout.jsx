@@ -7,12 +7,12 @@ import UngroupedColumn from './UngroupedColumn';
 import GroupsColumn from './GroupsColumn';
 import NewGroupBox from './NewGroupBox';
 import TabCard from './TabCard';
+import ToastContainer from './Toast';
 
 
 // Layout Component - Main 3-column layout with drag & drop
 function Layout() {
-  const { stagedState, hasChanges, showConflictBanner, resetToOriginal, applyChanges, refreshFromChrome, updateStaged } = useStagedStateContext();
-  const [isApplying, setIsApplying] = useState(false);
+  const { stagedState, hasChanges, showConflictBanner, isApplying, isAnalyzing, applyProgress, toasts, suggestions, resetToOriginal, applyChanges, analyzeTabs, refreshFromChrome, updateStaged, dismissConflictBanner } = useStagedStateContext();
   const [activeTab, setActiveTab] = useState(null);
 
   // Setup drag sensors
@@ -25,14 +25,7 @@ function Layout() {
   );
 
   const handleApply = async () => {
-    setIsApplying(true);
-    try {
-      await applyChanges();
-    } catch (error) {
-      console.error('Failed to apply changes:', error);
-    } finally {
-      setIsApplying(false);
-    }
+    await applyChanges();
   };
 
   const handleCancel = () => {
@@ -45,6 +38,10 @@ function Layout() {
     if (!hasChanges || confirm('Refreshing will discard unsaved changes. Continue?')) {
       await refreshFromChrome();
     }
+  };
+
+  const handleAnalyze = async () => {
+    await analyzeTabs();
   };
 
   const handleDragStart = (event) => {
@@ -111,21 +108,34 @@ function Layout() {
     }
     // Tab dropped on "New Group" box
     else if (dropTarget === 'new-group-box') {
+      console.log('Creating new group for tab:', draggedTabId);
       updateStaged((draft) => {
         // Create new group with unique negative ID (will be replaced on Apply)
         const newGroupId = Math.min(...draft.groups.map(g => g.id), -1) - 1;
-        draft.groups.push({
+        const newGroup = {
           id: newGroupId,
           title: 'New Group',
           color: 'grey',
           collapsed: false
-        });
+        };
+        draft.groups.push(newGroup);
+
+        console.log('Created new group:', newGroup);
 
         // Move tab to new group
         const tab = draft.tabs.find(t => t.id === draggedTabId);
         if (tab) {
+          const oldGroupId = tab.groupId;
           tab.groupId = newGroupId;
+          console.log(`Moved tab ${draggedTabId} from group ${oldGroupId} to new group ${newGroupId}`);
+        } else {
+          console.error('Tab not found:', draggedTabId);
         }
+
+        console.log('Draft state after new group:', {
+          groups: draft.groups.length,
+          newGroupTabs: draft.tabs.filter(t => t.groupId === newGroupId).length
+        });
       });
     }
     // Tab dropped on ungrouped area
@@ -157,13 +167,15 @@ function Layout() {
           hasChanges={hasChanges}
           onApply={handleApply}
           onCancel={handleCancel}
+          onAnalyze={handleAnalyze}
           isApplying={isApplying}
+          isAnalyzing={isAnalyzing}
         />
 
         {showConflictBanner && (
           <ConflictBanner
             onRefresh={handleRefresh}
-            onIgnore={() => {/* Hide banner */}}
+            onIgnore={dismissConflictBanner}
           />
         )}
 
@@ -197,7 +209,14 @@ function Layout() {
             Unsaved changes pending
           </span>
         )}
+        {isApplying && applyProgress.total > 0 && (
+          <span className="progress-indicator">
+            Applying {applyProgress.current}/{applyProgress.total}: {applyProgress.message}
+          </span>
+        )}
       </footer>
+
+      <ToastContainer toasts={toasts} />
       </div>
     </DndContext>
   );

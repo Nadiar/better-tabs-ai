@@ -4,6 +4,7 @@ import ReactDOM from 'react-dom/client';
 import ErrorBoundary from './components/ErrorBoundary';
 import LoadingState from './components/LoadingState';
 import Layout from './components/Layout';
+import { calculateDiff, describeChanges } from './utils/diff-calculator';
 import "./styles/main.css";import "./styles/layout.css";import "./styles/drag-drop.css";import "./styles/animations.css";
 
 // Staged State Context - Provides staged state to all components
@@ -35,16 +36,64 @@ function App() {
 
   const [hasChanges, setHasChanges] = useState(false);
   const [showConflictBanner, setShowConflictBanner] = useState(false);
+  const [isApplying, setIsApplying] = useState(false);
+  const [applyProgress, setApplyProgress] = useState({ current: 0, total: 0, message: '' });
+  const [toasts, setToasts] = useState([]);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [suggestions, setSuggestions] = useState(null);
+
+  // Use ref to track hasChanges for event listeners (avoid stale closure)
+  const hasChangesRef = React.useRef(false);
+  const isApplyingRef = React.useRef(false); // Track if we're applying changes
 
   // Load initial data from Chrome
   useEffect(() => {
     loadChromeData();
-  }, []);
+
+    // Set up listeners for external Chrome changes
+    const handleTabUpdate = () => {
+      // Ignore events during Apply (we're making the changes ourselves)
+      if (isApplyingRef.current) {
+        console.log('Ignoring Chrome event during Apply');
+        return;
+      }
+
+      // Use ref to get current value (avoid stale closure)
+      if (!hasChangesRef.current) {
+        // Only auto-refresh if there are no unsaved changes
+        console.log('Auto-refreshing: external Chrome change detected');
+        loadChromeData();
+      } else {
+        // Show conflict banner if there are unsaved changes
+        console.log('Conflict detected: changes made externally while unsaved changes exist');
+        setShowConflictBanner(true);
+      }
+    };
+
+    // Listen to Chrome tab/group events
+    chrome.tabs.onCreated.addListener(handleTabUpdate);
+    chrome.tabs.onRemoved.addListener(handleTabUpdate);
+    chrome.tabs.onUpdated.addListener(handleTabUpdate);
+    chrome.tabGroups.onCreated.addListener(handleTabUpdate);
+    chrome.tabGroups.onRemoved.addListener(handleTabUpdate);
+    chrome.tabGroups.onUpdated.addListener(handleTabUpdate);
+
+    // Cleanup listeners
+    return () => {
+      chrome.tabs.onCreated.removeListener(handleTabUpdate);
+      chrome.tabs.onRemoved.removeListener(handleTabUpdate);
+      chrome.tabs.onUpdated.removeListener(handleTabUpdate);
+      chrome.tabGroups.onCreated.removeListener(handleTabUpdate);
+      chrome.tabGroups.onRemoved.removeListener(handleTabUpdate);
+      chrome.tabGroups.onUpdated.removeListener(handleTabUpdate);
+    };
+  }, []); // Remove hasChanges dependency to avoid recreating listeners
 
   // Check for changes
   useEffect(() => {
     const changed = JSON.stringify(originalState) !== JSON.stringify(stagedState);
     setHasChanges(changed);
+    hasChangesRef.current = changed; // Keep ref in sync
   }, [originalState, stagedState]);
 
   const loadChromeData = async () => {
@@ -98,94 +147,250 @@ function App() {
     setHasChanges(false);
   };
 
+  const addToast = (message, type = 'info') => {
+    const id = Date.now();
+    setToasts(prev => [...prev, { id, message, type }]);
+    setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== id));
+    }, 5000);
+  };
+
   const applyChanges = async () => {
-    console.log('Applying changes:', { originalState, stagedState });
+    setIsApplying(true);
+    isApplyingRef.current = true; // Disable event listeners during Apply
+
+    // Calculate diff
+    const operations = calculateDiff(originalState, stagedState);
+    const changeDesc = describeChanges(operations);
+
+    console.log('Applying changes:', changeDesc, operations);
+
+    // Calculate total operations for progress tracking
+    const totalOps = operations.newGroups.length +
+                     operations.groupRenames.length +
+                     operations.tabMoves.length +
+                     operations.tabReorders.length +
+                     operations.groupDeletes.length;
+
+    let currentOp = 0;
+    setApplyProgress({ current: 0, total: totalOps, message: 'Starting...' });
+
+    const errors = [];
+    const groupIdMap = {}; // Map negative IDs to real Chrome group IDs
 
     try {
-      // 1. Handle new groups (negative IDs)
-      const newGroups = stagedState.groups.filter(g => g.id < 0);
-      const groupIdMap = {}; // Map negative IDs to real Chrome group IDs
+      // 1. Create new groups
+      for (const op of operations.newGroups) {
+        try {
+          currentOp++;
+          setApplyProgress({ current: currentOp, total: totalOps, message: `Creating group "${op.title}"...` });
 
-      for (const newGroup of newGroups) {
-        // Find tabs that should be in this group
-        const tabsInGroup = stagedState.tabs.filter(t => t.groupId === newGroup.id);
+          if (op.tabIds.length === 0) continue;
 
-        if (tabsInGroup.length > 0) {
-          // Create group with first tab
           const groupId = await chrome.tabs.group({
-            tabIds: tabsInGroup[0].id
+            tabIds: op.tabIds[0]
           });
 
-          // Update group properties
           await chrome.tabGroups.update(groupId, {
-            title: newGroup.title || 'New Group',
-            color: newGroup.color || 'grey'
+            title: op.title,
+            color: op.color
           });
 
-          groupIdMap[newGroup.id] = groupId;
+          groupIdMap[op.tempId] = groupId;
 
-          // Add remaining tabs to group
-          if (tabsInGroup.length > 1) {
+          // Add remaining tabs
+          if (op.tabIds.length > 1) {
             await chrome.tabs.group({
               groupId: groupId,
-              tabIds: tabsInGroup.slice(1).map(t => t.id)
+              tabIds: op.tabIds.slice(1)
             });
           }
+
+          console.log(`✓ Created group "${op.title}" with ${op.tabIds.length} tabs`);
+          addToast(`Created group "${op.title}"`, 'success');
+        } catch (err) {
+          console.error(`Failed to create group "${op.title}":`, err);
+          const errorMsg = `Failed to create group "${op.title}": ${err.message}`;
+          errors.push(errorMsg);
+          addToast(errorMsg, 'error');
         }
       }
 
-      // 2. Handle existing groups - update titles
-      const existingGroups = stagedState.groups.filter(g => g.id > 0);
-      for (const group of existingGroups) {
-        const originalGroup = originalState.groups.find(g => g.id === group.id);
-        if (originalGroup && originalGroup.title !== group.title) {
-          await chrome.tabGroups.update(group.id, {
-            title: group.title
+      // 2. Rename groups
+      for (const op of operations.groupRenames) {
+        try {
+          currentOp++;
+          setApplyProgress({ current: currentOp, total: totalOps, message: `Renaming group to "${op.newTitle}"...` });
+
+          await chrome.tabGroups.update(op.groupId, {
+            title: op.newTitle
           });
+          console.log(`✓ Renamed "${op.oldTitle}" → "${op.newTitle}"`);
+        } catch (err) {
+          console.error(`Failed to rename group:`, err);
+          const errorMsg = `Failed to rename group: ${err.message}`;
+          errors.push(errorMsg);
+          addToast(errorMsg, 'error');
         }
       }
 
-      // 3. Handle tab movements
-      for (const tab of stagedState.tabs) {
-        const originalTab = originalState.tabs.find(t => t.id === tab.id);
+      // 3. Move tabs to groups
+      for (const op of operations.tabMoves) {
+        try {
+          currentOp++;
+          setApplyProgress({ current: currentOp, total: totalOps, message: `Moving tab "${op.title}"...` });
 
-        if (!originalTab) continue;
+          let targetGroupId = op.toGroup;
 
-        let targetGroupId = tab.groupId;
+          // Map negative group IDs to real ones
+          if (targetGroupId < 0 && groupIdMap[targetGroupId]) {
+            targetGroupId = groupIdMap[targetGroupId];
+          }
 
-        // Map negative group IDs to real ones
-        if (targetGroupId < 0 && groupIdMap[targetGroupId]) {
-          targetGroupId = groupIdMap[targetGroupId];
-        }
-
-        // Tab moved to a group
-        if (originalTab.groupId !== tab.groupId) {
           if (targetGroupId === -1) {
-            // Ungroup tab
-            await chrome.tabs.ungroup(tab.id);
+            await chrome.tabs.ungroup(op.tabId);
+            console.log(`✓ Ungrouped tab: ${op.title}`);
           } else if (targetGroupId > 0) {
-            // Move to group
             await chrome.tabs.group({
               groupId: targetGroupId,
-              tabIds: tab.id
+              tabIds: op.tabId
             });
+            console.log(`✓ Moved tab "${op.title}" to group`);
           }
-        }
-
-        // Handle tab reordering (if index changed)
-        if (originalTab.index !== tab.index) {
-          await chrome.tabs.move(tab.id, { index: tab.index });
+        } catch (err) {
+          console.error(`Failed to move tab:`, err);
+          const errorMsg = `Failed to move tab: ${err.message}`;
+          errors.push(errorMsg);
+          addToast(errorMsg, 'error');
         }
       }
 
-      console.log('✓ Changes applied successfully');
+      // 4. Reorder tabs
+      for (const op of operations.tabReorders) {
+        try {
+          currentOp++;
+          setApplyProgress({ current: currentOp, total: totalOps, message: `Reordering tabs...` });
+
+          await chrome.tabs.move(op.tabId, { index: op.newIndex });
+        } catch (err) {
+          console.error(`Failed to reorder tab:`, err);
+          // Don't add to errors - reordering is non-critical
+        }
+      }
+
+      // 5. Delete groups
+      for (const groupId of operations.groupDeletes) {
+        try {
+          currentOp++;
+          setApplyProgress({ current: currentOp, total: totalOps, message: `Deleting group...` });
+
+          await chrome.tabGroups.update(groupId, { collapsed: false });
+          const tabs = await chrome.tabs.query({ groupId: groupId });
+          if (tabs.length > 0) {
+            await chrome.tabs.ungroup(tabs.map(t => t.id));
+          }
+          console.log(`✓ Deleted group`);
+        } catch (err) {
+          console.error(`Failed to delete group:`, err);
+          const errorMsg = `Failed to delete group: ${err.message}`;
+          errors.push(errorMsg);
+          addToast(errorMsg, 'error');
+        }
+      }
+
+      console.log(`✓ Applied ${changeDesc}`);
+
+      // Show success toast
+      if (errors.length === 0) {
+        addToast(`Successfully applied ${changeDesc}`, 'success');
+      } else {
+        addToast(`Applied changes with ${errors.length} error(s)`, 'warning');
+      }
 
       // Reload from Chrome
+      setApplyProgress({ current: totalOps, total: totalOps, message: 'Reloading...' });
       await loadChromeData();
     } catch (error) {
       console.error('Failed to apply changes:', error);
-      alert(`Failed to apply changes: ${error.message}`);
+      addToast(`Failed to apply changes: ${error.message}`, 'error');
+    } finally {
+      setIsApplying(false);
+      isApplyingRef.current = false; // Re-enable event listeners
+      setApplyProgress({ current: 0, total: 0, message: '' });
     }
+  };
+
+  const dismissConflictBanner = () => {
+    setShowConflictBanner(false);
+  };
+
+  const analyzeTabs = async () => {
+    setIsAnalyzing(true);
+
+    try {
+      addToast('Analyzing tabs with AI...', 'info');
+
+      const response = await chrome.runtime.sendMessage({
+        action: 'analyzeAllTabs',
+        forceRefresh: false
+      });
+
+      if (response.error) {
+        addToast(`Analysis failed: ${response.error}`, 'error');
+      } else if (response.cached) {
+        // Using cached results
+        setSuggestions(response.suggestions || []);
+        addToast(response.message || 'Analysis complete (cached)', 'success');
+      } else if (response.started) {
+        // Background analysis started - poll for results
+        addToast('Analysis started in background...', 'info');
+        pollForAnalysisResults();
+      } else if (response.suggestions) {
+        // Immediate results
+        setSuggestions(response.suggestions);
+        addToast(`Found ${response.suggestions.length} grouping suggestions`, 'success');
+      }
+    } catch (error) {
+      console.error('Error analyzing tabs:', error);
+      addToast(`Analysis error: ${error.message}`, 'error');
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  const pollForAnalysisResults = () => {
+    const pollInterval = setInterval(async () => {
+      try {
+        const response = await chrome.runtime.sendMessage({
+          action: 'getAnalysisProgress'
+        });
+
+        if (response.progress && response.progress.status === 'complete') {
+          clearInterval(pollInterval);
+
+          const resultsResponse = await chrome.runtime.sendMessage({
+            action: 'getLastAnalysisResults'
+          });
+
+          if (resultsResponse.results && resultsResponse.results.suggestions) {
+            setSuggestions(resultsResponse.results.suggestions);
+            addToast(`Found ${resultsResponse.results.suggestions.length} grouping suggestions`, 'success');
+          }
+
+          setIsAnalyzing(false);
+        }
+      } catch (error) {
+        clearInterval(pollInterval);
+        console.error('Error polling for results:', error);
+        setIsAnalyzing(false);
+      }
+    }, 1000);
+
+    // Stop polling after 2 minutes
+    setTimeout(() => {
+      clearInterval(pollInterval);
+      setIsAnalyzing(false);
+    }, 120000);
   };
 
   const contextValue = {
@@ -193,10 +398,17 @@ function App() {
     stagedState,
     hasChanges,
     showConflictBanner,
+    isApplying,
+    isAnalyzing,
+    applyProgress,
+    toasts,
+    suggestions,
     updateStaged,
     resetToOriginal,
     applyChanges,
-    refreshFromChrome: loadChromeData
+    analyzeTabs,
+    refreshFromChrome: loadChromeData,
+    dismissConflictBanner
   };
 
   if (error) {
