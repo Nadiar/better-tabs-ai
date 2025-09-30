@@ -112,10 +112,19 @@ function Layout() {
       updateStaged((draft) => {
         // Create new group with unique negative ID (will be replaced on Apply)
         const newGroupId = Math.min(...draft.groups.map(g => g.id), -1) - 1;
+
+        // Pick a random unused color
+        const chromeColors = ['grey', 'blue', 'red', 'yellow', 'green', 'pink', 'purple', 'cyan'];
+        const usedColors = draft.groups.map(g => g.color);
+        const availableColors = chromeColors.filter(c => !usedColors.includes(c));
+        const randomColor = availableColors.length > 0
+          ? availableColors[Math.floor(Math.random() * availableColors.length)]
+          : chromeColors[Math.floor(Math.random() * chromeColors.length)];
+
         const newGroup = {
           id: newGroupId,
           title: 'New Group',
-          color: 'grey',
+          color: randomColor,
           collapsed: false
         };
         draft.groups.push(newGroup);

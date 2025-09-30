@@ -10,6 +10,8 @@ function GroupContainer({ group, tabs, isSuggested = false, confidence = null })
   const groupTabs = tabs.filter(tab => tab.groupId === group.id);
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState(group.title || '');
+  const [isGeneratingName, setIsGeneratingName] = useState(false);
+  const [showColorPicker, setShowColorPicker] = useState(false);
   const inputRef = useRef(null);
   const { updateStaged } = useStagedStateContext();
 
@@ -52,6 +54,63 @@ function GroupContainer({ group, tabs, isSuggested = false, confidence = null })
     }
   };
 
+  const handleGenerateName = async () => {
+    if (isGeneratingName || groupTabs.length === 0) return;
+
+    setIsGeneratingName(true);
+
+    try {
+      const response = await chrome.runtime.sendMessage({
+        action: 'generateGroupName',
+        tabs: groupTabs.map(t => ({
+          title: t.title,
+          url: t.url
+        }))
+      });
+
+      if (response.error) {
+        console.error('Failed to generate name:', response.error);
+      } else if (response.groupName) {
+        updateStaged((draft) => {
+          const groupToUpdate = draft.groups.find(g => g.id === group.id);
+          if (groupToUpdate) {
+            groupToUpdate.title = response.groupName;
+          }
+        });
+      }
+    } catch (error) {
+      console.error('Error generating group name:', error);
+    } finally {
+      setIsGeneratingName(false);
+    }
+  };
+
+  const handleColorChange = (newColor) => {
+    updateStaged((draft) => {
+      const groupToUpdate = draft.groups.find(g => g.id === group.id);
+      if (groupToUpdate) {
+        groupToUpdate.color = newColor;
+      }
+    });
+    setShowColorPicker(false);
+  };
+
+  const handleDeleteGroup = () => {
+    if (confirm(`Delete group "${group.title}"? Tabs will be ungrouped.`)) {
+      updateStaged((draft) => {
+        // Remove group
+        draft.groups = draft.groups.filter(g => g.id !== group.id);
+
+        // Ungroup all tabs
+        draft.tabs.forEach(tab => {
+          if (tab.groupId === group.id) {
+            tab.groupId = -1;
+          }
+        });
+      });
+    }
+  };
+
   // Chrome tab group colors
   const getGroupColor = (color) => {
     const colors = {
@@ -67,6 +126,8 @@ function GroupContainer({ group, tabs, isSuggested = false, confidence = null })
     return colors[color] || colors.grey;
   };
 
+  const chromeColors = ['grey', 'blue', 'red', 'yellow', 'green', 'pink', 'purple', 'cyan'];
+
   return (
     <div
       ref={setNodeRef}
@@ -75,6 +136,31 @@ function GroupContainer({ group, tabs, isSuggested = false, confidence = null })
     >
       <div className="group-header" style={{ backgroundColor: getGroupColor(group.color) + '20' }}>
         <div className="group-title-section">
+          {/* Color swatch */}
+          {!isSuggested && (
+            <div className="color-swatch-container">
+              <button
+                className="color-swatch"
+                style={{ backgroundColor: getGroupColor(group.color) }}
+                onClick={() => setShowColorPicker(!showColorPicker)}
+                title="Change color"
+              />
+              {showColorPicker && (
+                <div className="color-picker-dropdown">
+                  {chromeColors.map(color => (
+                    <button
+                      key={color}
+                      className={`color-option ${group.color === color ? 'active' : ''}`}
+                      style={{ backgroundColor: getGroupColor(color) }}
+                      onClick={() => handleColorChange(color)}
+                      title={color}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           {isEditing ? (
             <input
               ref={inputRef}
@@ -85,6 +171,7 @@ function GroupContainer({ group, tabs, isSuggested = false, confidence = null })
               onBlur={handleTitleBlur}
               onKeyDown={handleTitleKeyDown}
               placeholder="Group name"
+              maxLength={50}
             />
           ) : (
             <span
@@ -96,6 +183,19 @@ function GroupContainer({ group, tabs, isSuggested = false, confidence = null })
               {group.title || 'Untitled Group'}
             </span>
           )}
+
+          {/* AI Name Generation */}
+          {!isSuggested && !isEditing && groupTabs.length > 0 && (
+            <button
+              className="btn-icon ai-name-btn"
+              onClick={handleGenerateName}
+              disabled={isGeneratingName}
+              title="Generate AI name"
+            >
+              {isGeneratingName ? '⏳' : '✨'}
+            </button>
+          )}
+
           {isSuggested && (
             <span className="suggested-badge">Suggested</span>
           )}
@@ -107,7 +207,11 @@ function GroupContainer({ group, tabs, isSuggested = false, confidence = null })
         <div className="group-actions">
           <span className="tab-count">{groupTabs.length}</span>
           {!isSuggested && (
-            <button className="btn-icon delete-group" title="Delete group">
+            <button
+              className="btn-icon delete-group"
+              onClick={handleDeleteGroup}
+              title="Delete group"
+            >
               ×
             </button>
           )}

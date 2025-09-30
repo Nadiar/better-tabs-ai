@@ -355,6 +355,11 @@ class BetterTabsAI {
           sendResponse(duplicates);
           break;
 
+        case 'generateGroupName':
+          const groupName = await this.generateGroupName(message.tabs);
+          sendResponse(groupName);
+          break;
+
         case 'clearCache':
           this.cacheManager.clear();
           console.log('🧹 Analysis cache cleared');
@@ -1408,6 +1413,46 @@ Provide a JSON response with this exact structure:
       return duplicates;
     } catch (error) {
       console.error('Error finding duplicates:', error);
+      return { error: error.message };
+    }
+  }
+
+  async generateGroupName(tabs) {
+    try {
+      console.log('Generating name for group with', tabs.length, 'tabs');
+
+      if (!tabs || tabs.length === 0) {
+        return { error: 'No tabs provided' };
+      }
+
+      // Ensure AI session exists
+      if (!this.aiSession) {
+        await this.createAISession();
+      }
+
+      if (!this.aiSession) {
+        return { error: 'AI session not available' };
+      }
+
+      // Create prompt for AI
+      const tabInfo = tabs.map(t => `- ${t.title} (${t.url})`).join('\n');
+
+      const prompt = `Based on these ${tabs.length} browser tabs, suggest a short, descriptive group name (2-4 words max):
+
+${tabInfo}
+
+Provide only the group name, nothing else. Examples of good names: "Social Media", "Work Docs", "Shopping", "Dev Tools", "News & Articles"`;
+
+      console.log('Sending prompt to AI for group name generation...');
+
+      const response = await this.aiSession.prompt(prompt);
+      const groupName = response.trim();
+
+      console.log('✓ Generated group name:', groupName);
+
+      return { groupName };
+    } catch (error) {
+      console.error('Error generating group name:', error);
       return { error: error.message };
     }
   }
