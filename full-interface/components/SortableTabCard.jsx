@@ -1,20 +1,25 @@
-import React, { useState } from 'react';
-import { useDraggable } from '@dnd-kit/core';
+import React from 'react';
+import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
-// Tab Card Component - Draggable tab with favicon and title
-function TabCard({ tab, isSelected, isDuplicate, onSelect }) {
-  const [faviconLoaded, setFaviconLoaded] = useState(false);
-  const [faviconError, setFaviconError] = useState(false);
-
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+// SortableTabCard - Wrapper for TabCard that makes it sortable within groups
+function SortableTabCard({ tab, isSelected, isDuplicate, onSelect }) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging
+  } = useSortable({
     id: `tab-${tab.id}`,
     data: { tab }
   });
 
   const style = {
-    transform: CSS.Translate.toString(transform),
-    opacity: isDragging ? 0.5 : 1,
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.3 : 1,
     cursor: isDragging ? 'grabbing' : 'grab'
   };
 
@@ -40,8 +45,8 @@ function TabCard({ tab, isSelected, isDuplicate, onSelect }) {
     <div
       ref={setNodeRef}
       style={style}
-      {...listeners}
       {...attributes}
+      {...listeners}
       className={`tab-card ${isSelected ? 'selected' : ''} ${isDuplicate ? 'duplicate' : ''} ${isDragging ? 'dragging' : ''}`}
       onClick={(e) => onSelect && onSelect(tab.id, e)}
       title={`${tab.title}\n${tab.url}`}
@@ -49,10 +54,8 @@ function TabCard({ tab, isSelected, isDuplicate, onSelect }) {
       <img
         src={getFaviconUrl(tab)}
         alt=""
-        className={`tab-favicon ${!faviconLoaded && !faviconError ? 'loading' : ''}`}
-        onLoad={() => setFaviconLoaded(true)}
+        className="tab-favicon"
         onError={(e) => {
-          setFaviconError(true);
           e.target.src = chrome.runtime.getURL('icons/icon16.png');
         }}
       />
@@ -67,4 +70,4 @@ function TabCard({ tab, isSelected, isDuplicate, onSelect }) {
   );
 }
 
-export default React.memo(TabCard);
+export default React.memo(SortableTabCard);

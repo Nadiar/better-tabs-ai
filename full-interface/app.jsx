@@ -77,11 +77,20 @@ function App() {
     }
   };
 
-  const updateStaged = (updates) => {
-    setStagedState(prev => ({
-      ...prev,
-      ...updates
-    }));
+  const updateStaged = (updaterFn) => {
+    setStagedState(prev => {
+      // If updaterFn is a function, call it with a mutable draft
+      if (typeof updaterFn === 'function') {
+        const draft = JSON.parse(JSON.stringify(prev)); // Deep clone
+        updaterFn(draft);
+        return draft;
+      }
+      // Otherwise treat as direct updates object
+      return {
+        ...prev,
+        ...updaterFn
+      };
+    });
   };
 
   const resetToOriginal = () => {
@@ -90,11 +99,93 @@ function App() {
   };
 
   const applyChanges = async () => {
-    // TODO: Implement batch apply in Phase 3
-    console.log('Apply changes:', { originalState, stagedState });
+    console.log('Applying changes:', { originalState, stagedState });
 
-    // For now, just refresh
-    await loadChromeData();
+    try {
+      // 1. Handle new groups (negative IDs)
+      const newGroups = stagedState.groups.filter(g => g.id < 0);
+      const groupIdMap = {}; // Map negative IDs to real Chrome group IDs
+
+      for (const newGroup of newGroups) {
+        // Find tabs that should be in this group
+        const tabsInGroup = stagedState.tabs.filter(t => t.groupId === newGroup.id);
+
+        if (tabsInGroup.length > 0) {
+          // Create group with first tab
+          const groupId = await chrome.tabs.group({
+            tabIds: tabsInGroup[0].id
+          });
+
+          // Update group properties
+          await chrome.tabGroups.update(groupId, {
+            title: newGroup.title || 'New Group',
+            color: newGroup.color || 'grey'
+          });
+
+          groupIdMap[newGroup.id] = groupId;
+
+          // Add remaining tabs to group
+          if (tabsInGroup.length > 1) {
+            await chrome.tabs.group({
+              groupId: groupId,
+              tabIds: tabsInGroup.slice(1).map(t => t.id)
+            });
+          }
+        }
+      }
+
+      // 2. Handle existing groups - update titles
+      const existingGroups = stagedState.groups.filter(g => g.id > 0);
+      for (const group of existingGroups) {
+        const originalGroup = originalState.groups.find(g => g.id === group.id);
+        if (originalGroup && originalGroup.title !== group.title) {
+          await chrome.tabGroups.update(group.id, {
+            title: group.title
+          });
+        }
+      }
+
+      // 3. Handle tab movements
+      for (const tab of stagedState.tabs) {
+        const originalTab = originalState.tabs.find(t => t.id === tab.id);
+
+        if (!originalTab) continue;
+
+        let targetGroupId = tab.groupId;
+
+        // Map negative group IDs to real ones
+        if (targetGroupId < 0 && groupIdMap[targetGroupId]) {
+          targetGroupId = groupIdMap[targetGroupId];
+        }
+
+        // Tab moved to a group
+        if (originalTab.groupId !== tab.groupId) {
+          if (targetGroupId === -1) {
+            // Ungroup tab
+            await chrome.tabs.ungroup(tab.id);
+          } else if (targetGroupId > 0) {
+            // Move to group
+            await chrome.tabs.group({
+              groupId: targetGroupId,
+              tabIds: tab.id
+            });
+          }
+        }
+
+        // Handle tab reordering (if index changed)
+        if (originalTab.index !== tab.index) {
+          await chrome.tabs.move(tab.id, { index: tab.index });
+        }
+      }
+
+      console.log('✓ Changes applied successfully');
+
+      // Reload from Chrome
+      await loadChromeData();
+    } catch (error) {
+      console.error('Failed to apply changes:', error);
+      alert(`Failed to apply changes: ${error.message}`);
+    }
   };
 
   const contextValue = {

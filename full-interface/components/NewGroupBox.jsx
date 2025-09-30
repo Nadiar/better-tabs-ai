@@ -1,10 +1,15 @@
 import React from 'react';
+import { useDroppable } from '@dnd-kit/core';
 
-// New Group Box - Right column drop target for creating new groups
+// New Group Box - Droppable area for creating new groups
 function NewGroupBox() {
+  const { setNodeRef, isOver } = useDroppable({
+    id: 'new-group-box'
+  });
+
   return (
     <div className="column new-group-column">
-      <div className="new-group-box">
+      <div ref={setNodeRef} className={`new-group-box ${isOver ? 'drag-over' : ''}`}>
         <div className="new-group-icon">📁</div>
         <h3>New Group</h3>
         <p>Drag tabs here to create a new group</p>

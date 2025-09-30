@@ -1,13 +1,18 @@
 import React from 'react';
+import { useDroppable } from '@dnd-kit/core';
 import TabCard from './TabCard';
 
 
-// Ungrouped Tabs Column - Left column showing tabs without groups
+// Ungrouped Tabs Column - Droppable area for ungrouped tabs
 function UngroupedColumn({ tabs }) {
   const ungroupedTabs = tabs.filter(tab => tab.groupId === -1);
 
+  const { setNodeRef, isOver } = useDroppable({
+    id: 'ungrouped-column'
+  });
+
   return (
-    <div className="column ungrouped-column">
+    <div ref={setNodeRef} className={`column ungrouped-column ${isOver ? 'drag-over' : ''}`}>
       <div className="column-header">
         <h2>Ungrouped Tabs</h2>
         <span className="count-badge">{ungroupedTabs.length}</span>
