@@ -52,8 +52,18 @@ function App() {
       setIsLoading(true);
 
       // Fetch tabs and groups from Chrome
-      const tabs = await chrome.tabs.query({});
+      const allTabs = await chrome.tabs.query({});
       const groups = await chrome.tabGroups.query({});
+
+      // Get window tab counts to filter out single-tab windows (PWA apps)
+      const windows = await chrome.windows.getAll({ populate: true });
+      const windowTabCounts = {};
+      windows.forEach(window => {
+        windowTabCounts[window.id] = window.tabs.length;
+      });
+
+      // Filter out tabs from windows with only 1 tab (PWA apps)
+      const tabs = allTabs.filter(tab => windowTabCounts[tab.windowId] > 1);
 
       const initialState = { tabs, groups };
       setOriginalState(initialState);

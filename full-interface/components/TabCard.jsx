@@ -1,9 +1,12 @@
-import React from 'react';
+import React, { useState } from 'react';
 
 // Tab Card Component - Displays individual tab (will be draggable in Phase 2)
 function TabCard({ tab, isSelected, isDuplicate, onSelect }) {
+  const [faviconLoaded, setFaviconLoaded] = useState(false);
+  const [faviconError, setFaviconError] = useState(false);
+
   const getFaviconUrl = (tab) => {
-    return tab.favIconUrl || '../icons/icon16.png';
+    return tab.favIconUrl || chrome.runtime.getURL('icons/icon16.png');
   };
 
   const getDomain = (url) => {
@@ -29,9 +32,11 @@ function TabCard({ tab, isSelected, isDuplicate, onSelect }) {
       <img
         src={getFaviconUrl(tab)}
         alt=""
-        className="tab-favicon"
+        className={`tab-favicon ${!faviconLoaded && !faviconError ? 'loading' : ''}`}
+        onLoad={() => setFaviconLoaded(true)}
         onError={(e) => {
-          e.target.src = '../icons/icon16.png';
+          setFaviconError(true);
+          e.target.src = chrome.runtime.getURL('icons/icon16.png');
         }}
       />
       <div className="tab-info">
