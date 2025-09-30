@@ -4,7 +4,7 @@ const { useState, useEffect, createContext, useContext } = React;
 // Staged State Context - Provides staged state to all components
 const StagedStateContext = createContext(null);
 
-export const useStagedStateContext = () => {
+window.useStagedStateContext = () => {
   const context = useContext(StagedStateContext);
   if (!context) {
     throw new Error('useStagedStateContext must be used within StagedStateProvider');
@@ -94,28 +94,24 @@ function App() {
   };
 
   if (error) {
-    return (
+    return html`
       <div className="error-container">
         <h2>Error Loading Tabs</h2>
-        <p>{error}</p>
-        <button onClick={loadChromeData}>Retry</button>
+        <p>${error}</p>
+        <button onClick=${loadChromeData}>Retry</button>
       </div>
-    );
+    `;
   }
 
-  return (
-    <ErrorBoundary>
-      <StagedStateContext.Provider value={contextValue}>
-        {isLoading ? (
-          <LoadingState />
-        ) : (
-          <Layout />
-        )}
-      </StagedStateContext.Provider>
-    </ErrorBoundary>
-  );
+  return html`
+    <${ErrorBoundary}>
+      <${StagedStateContext.Provider} value=${contextValue}>
+        ${isLoading ? html`<${LoadingState} />` : html`<${Layout} />`}
+      </${StagedStateContext.Provider}>
+    </${ErrorBoundary}>
+  `;
 }
 
 // Render app
 const root = ReactDOM.createRoot(document.getElementById('root'));
-root.render(<App />);
+root.render(html`<${App} />`);
