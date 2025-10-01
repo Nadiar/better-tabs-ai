@@ -32,6 +32,12 @@
 
 ## Demo
 
+### 📸 Interface Overview
+
+![Feature Showcase](screenshots/feature_showcase.png)
+
+Complete drag-and-drop interface with AI-powered tab organization
+
 ### 🎬 Drag & Drop Workflow
 
 ![Drag & Drop Animation](screenshots/drag_drop_animation.gif)
