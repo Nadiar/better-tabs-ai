@@ -1,5 +1,7 @@
 # Better Tabs AI
 
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+
 🤖 AI-powered Chrome extension for intelligent tab organization and management using Chrome's built-in Gemini Nano AI.
 
 ## Features
@@ -317,7 +319,9 @@ npm run build  # Production build
 
 ## License
 
-MIT License - see LICENSE file for details.
+This project is licensed under the GNU General Public License v3.0 - see the [LICENSE](LICENSE) file for details.
+
+**Why GPL v3?** This license ensures that Better Tabs AI and any forks or derivatives remain open source and free for the community. If you modify and distribute this extension, you must also share your source code under the same GPL v3 license.
 
 ## Roadmap
 
