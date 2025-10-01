@@ -315,6 +315,27 @@ const PatternDetector = {
   }
 };
 
+// Default Settings (Phase E)
+const DEFAULT_SETTINGS = {
+  // AI Analysis Settings
+  aiAggressiveness: 0.6,           // 0.5 (aggressive) - 0.9 (conservative)
+  minConfidenceThreshold: 0.5,     // Minimum confidence to show suggestion (lowered from 0.6)
+  correlationMode: 'similar',      // 'exact' | 'similar' | 'loose'
+  maxSuggestions: 10,              // Maximum suggestions to show
+  minTabsForSuggestion: 2,         // Minimum tabs needed to suggest a group
+
+  // UI Preferences
+  showConfidenceScores: true,      // Show percentage in UI
+  showInlineSuggestions: true,     // Show suggestions in full interface
+  autoCollapseGroups: false,       // Auto-collapse after creation
+  defaultGroupColor: 'grey',       // Default color for new groups
+
+  // Performance
+  cacheDuration: 60000,            // Cache duration in ms
+  enableContentAnalysis: true,     // Analyze tab content (slower but more accurate)
+  maxConcurrentAnalysis: 10        // Max tabs to analyze at once
+};
+
 class BetterTabsAI {
   constructor() {
     this.session = null;
@@ -322,6 +343,7 @@ class BetterTabsAI {
     this.isAIAvailable = false;
     this.aiStatus = AIStatus.UNKNOWN_ERROR;
     this.cacheManager = new CacheManager({ maxSize: 100 });
+    this.settings = { ...DEFAULT_SETTINGS }; // Initialize with defaults
     this.analysisInProgress = false;
     this.analysisProgress = { current: 0, total: 0, status: 'idle' };
     this.init();
@@ -329,9 +351,10 @@ class BetterTabsAI {
 
   async init() {
     console.log('Better Tabs AI: Initializing...');
+    await this.loadSettings(); // Load user settings from storage
     await this.checkAIAvailability();
     this.setupEventListeners();
-    
+
     // Try to create session on startup if AI is available
     if (this.isAIAvailable) {
       try {
@@ -340,6 +363,33 @@ class BetterTabsAI {
       } catch (error) {
         console.log('Failed to create AI session on startup:', error);
       }
+    }
+  }
+
+  async loadSettings() {
+    try {
+      const result = await chrome.storage.sync.get('betterTabsSettings');
+      if (result.betterTabsSettings) {
+        this.settings = { ...DEFAULT_SETTINGS, ...result.betterTabsSettings };
+        console.log('📋 Loaded settings:', this.settings);
+      } else {
+        console.log('📋 Using default settings');
+      }
+    } catch (error) {
+      console.error('Error loading settings:', error);
+      this.settings = { ...DEFAULT_SETTINGS };
+    }
+  }
+
+  async saveSettings(newSettings) {
+    try {
+      this.settings = { ...this.settings, ...newSettings };
+      await chrome.storage.sync.set({ betterTabsSettings: this.settings });
+      console.log('💾 Saved settings:', this.settings);
+      return { success: true };
+    } catch (error) {
+      console.error('Error saving settings:', error);
+      return { success: false, error: error.message };
     }
   }
 
@@ -523,6 +573,21 @@ class BetterTabsAI {
             results: stored.lastAnalysisResults || null,
             timestamp: stored.lastAnalysisTime || null
           });
+          break;
+
+        case 'getSettings':
+          sendResponse({ settings: this.settings });
+          break;
+
+        case 'saveSettings':
+          const saveResult = await this.saveSettings(message.settings);
+          sendResponse(saveResult);
+          break;
+
+        case 'resetSettings':
+          this.settings = { ...DEFAULT_SETTINGS };
+          await chrome.storage.sync.remove('betterTabsSettings');
+          sendResponse({ settings: this.settings });
           break;
 
         default:
@@ -1306,22 +1371,34 @@ Provide a JSON response with this exact structure:
         }
       }
 
-      console.log(`✅ Generated ${suggestions.length} total suggestions`);
+      console.log(`✅ Generated ${suggestions.length} total suggestions (before filtering)`);
+
+      // PHASE D: Filter by minimum confidence threshold
+      const filtered = suggestions.filter(s => s.confidence >= this.settings.minConfidenceThreshold);
+      console.log(`🎯 Filtered to ${filtered.length} suggestions (threshold: ${this.settings.minConfidenceThreshold})`);
 
       // Sort by confidence and tab count
-      suggestions.sort((a, b) => {
+      filtered.sort((a, b) => {
         const scoreA = a.tabs.length * a.confidence;
         const scoreB = b.tabs.length * b.confidence;
         return scoreB - scoreA;
       });
 
+      // Limit to maxSuggestions
+      const limited = filtered.slice(0, this.settings.maxSuggestions);
+      console.log(`📋 Returning ${limited.length} suggestions (max: ${this.settings.maxSuggestions})`);
+
       // Return both suggestions and existing groups info for debugging
       return {
-        suggestions: suggestions,
+        suggestions: limited,
         existingGroups: existingGroups.map(g => ({
           title: g.title,
           tabCount: g.tabCount
-        }))
+        })),
+        settings: {
+          minConfidenceThreshold: this.settings.minConfidenceThreshold,
+          maxSuggestions: this.settings.maxSuggestions
+        }
       };
     } catch (error) {
       console.error('Error suggesting groups:', error);
