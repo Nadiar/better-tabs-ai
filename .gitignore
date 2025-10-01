@@ -60,6 +60,11 @@ web-ext-artifacts/
 *.bak
 *.backup
 
+# Development and planning documents (keep only README.md and CHANGELOG.md)
+*.md
+!README.md
+!CHANGELOG.md
+
 # Claude AI and development files
 CLAUDE.md
 *claude*
@@ -67,21 +72,16 @@ CLAUDE.md
 
 # Testing and mock files
 tests/
-*test*
-*mock*
-*Test*
-*Mock*
-
-# Decision and planning documents
-*decisions*
-*-decisions.md
-*-planning.md
+test-*.html
+test-*.py
+mock-*.html
+*Test*.js
+*Mock*.js
 
 # Temporary and diagnostic files
 *temp*
 *diagnostic*
 performance_test_results.txt
-test-extension.html
 
 # Development artifacts
 *.orig
