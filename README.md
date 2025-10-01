@@ -7,29 +7,32 @@
 - **AI-Powered Grouping**: Automatically categorize and group tabs by topic using Chrome's built-in AI
 - **Granular Categorization**: Creates specific group names like "Amazon Shopping", "Python Development", "React Documentation"
 - **Smart Content Analysis**: Staged analysis starting with metadata, expanding to full content when needed
-- **Performance Optimized**: Analysis results cached for 1 minute, AI session created on startup
+- **Advanced Caching**: LRU cache with content-based invalidation and automatic eviction
+- **Intelligent Error Messages**: Detailed status for 7 different AI availability states
 - **Manual Trigger**: Analyze tabs on-demand to keep things lightweight
 - **Duplicate Detection**: Find and merge duplicate tabs automatically
-- **Cache Management**: Clear cache button for fresh analysis when tabs change
+- **Cache Management**: Clear cache button with hit rate statistics
 - **Focus Mode**: Hide distracting tab groups to improve productivity
 - **Minimal UI**: Clean popup interface with link to full-featured management page
 - **Privacy-First**: Uses local Chrome AI - no data sent to external servers
 
-## Version 1.2.0 Updates
+## Version 1.3.0 Updates
+
+### 🏗️ Major Improvements
+- **Architecture Overhaul**: AI now runs entirely in service worker (no tab injection)
+- **LRU Cache System**: Proper cache with content-hash keys and automatic eviction (max 100 entries)
+- **Error Differentiation**: 7 distinct error states with specific actions (Ready, Downloading, Flags Disabled, GPU Unavailable, etc.)
+- **Session Persistence**: Single AI session with automatic recovery on failure
 
 ### 🚀 Performance Improvements
-- **AI Session Management**: Sessions now created on service worker startup
-- **Analysis Caching**: Results cached for 1 minute to improve performance
-- **Popup Optimizations**: Removed direct AI testing to prevent timeout issues
+- **Faster Repeat Analysis**: Content-based caching detects actual changes
+- **Better Memory Management**: LRU eviction prevents unbounded growth
+- **Reduced Code**: 24% reduction in AI handling code
 
 ### 🔧 Bug Fixes
-- **Language Specification**: Fixed persistent language specification errors
-- **Popup Timeout**: Resolved popup closing during analysis
-- **Session Creation**: Eliminated redundant AI session creation
-
-### ✨ New Features
-- **Cache Management**: Added "Clear Cache" button for manual refresh
-- **Better Error Handling**: Improved error messages and fallback behavior
+- **Fixed**: Works with chrome:// and special URLs
+- **Fixed**: Cache invalidates on content updates
+- **Fixed**: Clear error messages instead of generic failures
 
 ## Requirements
 

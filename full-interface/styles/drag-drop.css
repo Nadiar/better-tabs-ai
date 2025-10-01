@@ -1,0 +1,61 @@
+/* Drag & Drop Styles - Phase 2 */
+
+/* Tab Card Dragging State */
+.tab-card {
+  cursor: grab;
+  transition: all 0.2s ease;
+}
+
+.tab-card.dragging {
+  opacity: 0.3; /* Make original semi-transparent */
+  cursor: grabbing;
+}
+
+/* Drag Overlay (rendered outside container) */
+.tab-card.dragging-overlay {
+  cursor: grabbing;
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.3);
+  transform: rotate(3deg);
+  background: white;
+  border: 2px solid var(--primary-color);
+  z-index: 9999;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border-radius: 8px;
+  min-height: 60px;
+  max-width: 300px;
+}
+
+/* Drop Zone Highlighting */
+.ungrouped-column.drag-over,
+.new-group-box.drag-over {
+  border-color: var(--success-color);
+  background: rgba(16, 185, 129, 0.05);
+  border-width: 2px;
+}
+
+.group-container.drag-over {
+  border-color: var(--success-color);
+  background: rgba(16, 185, 129, 0.08);
+  border-left-width: 4px;
+  position: relative;
+}
+
+.group-container.drag-over .group-header {
+  background: rgba(16, 185, 129, 0.15) !important;
+}
+
+/* New Group Box Hover Effect */
+.new-group-box.drag-over {
+  transform: scale(1.02);
+  border-style: solid;
+  box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.1);
+}
+
+.new-group-box.drag-over .new-group-icon {
+  transform: scale(1.2);
+  transition: transform 0.2s ease;
+}

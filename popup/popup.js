@@ -3,6 +3,8 @@
 class PopupManager {
     constructor() {
         this.currentSuggestions = []; // Store suggestions for button handlers
+        this.progressInterval = null;
+        this.lastAnalysisClick = 0;
         this.init();
     }
 
@@ -10,6 +12,44 @@ class PopupManager {
         this.setupEventListeners();
         await this.checkAIStatus();
         await this.updateTabStats();
+        await this.checkOngoingAnalysis();
+
+        // Cleanup on popup close
+        window.addEventListener('unload', () => {
+            if (this.progressInterval) {
+                clearInterval(this.progressInterval);
+            }
+        });
+    }
+
+    async checkOngoingAnalysis() {
+        try {
+            const progressResponse = await this.sendMessage({ action: 'getAnalysisProgress' });
+
+            if (progressResponse.inProgress) {
+                // Resume monitoring
+                const button = document.getElementById('analyzeTabsBtn');
+                button.disabled = true;
+                this.startProgressMonitoring();
+            } else if (progressResponse.progress && progressResponse.progress.status === 'complete') {
+                // Show last results if available
+                const resultsResponse = await this.sendMessage({ action: 'getLastAnalysisResults' });
+
+                if (resultsResponse.results && resultsResponse.timestamp) {
+                    // Show cached results regardless of age
+                    // (cache invalidation is handled by tab count changes)
+                    this.displayResults(resultsResponse.results);
+
+                    const age = Date.now() - resultsResponse.timestamp;
+                    if (age > 60 * 1000) {
+                        // Show age hint if older than 1 minute
+                        this.showInfo(`Showing cached results from ${Math.round(age / 1000)}s ago`);
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Error checking ongoing analysis:', error);
+        }
     }
 
   setupEventListeners() {
@@ -44,32 +84,41 @@ class PopupManager {
         this.clearCache();
       });
     }
-  }  async checkAIStatus() {
-    try {
-      // Check AI status through service worker only, not directly
-      let aiAvailable = false;
-      let statusMessage = 'Checking...';
-      let detailedStatus = '';
 
-      try {
-        // Only use service worker check to avoid language specification issues
-        const response = await this.sendMessage({ action: 'checkAIAvailability' });
-        aiAvailable = response.available || false;
-        statusMessage = response.statusMessage || 'Unknown';
-        detailedStatus = response.detailedStatus || 'Check service worker logs';
-        
-        console.log('AI Status from service worker:', response);
-      } catch (error) {
-        console.log('Service worker check failed:', error);
-        aiAvailable = false;
-        statusMessage = 'Service Worker Error';
-        detailedStatus = error.message;
-      }
-      
+    // Debug button
+    const debugBtn = document.getElementById('debugBtn');
+    if (debugBtn) {
+      debugBtn.addEventListener('click', () => {
+        this.copyDebugInfo();
+      });
+    }
+
+    // Full interface button
+    const fullInterfaceBtn = document.getElementById('openFullInterface');
+    if (fullInterfaceBtn) {
+      fullInterfaceBtn.addEventListener('click', () => {
+        this.openFullInterface();
+      });
+    }
+  }  async checkAIStatus(retryCount = 0) {
+    try {
+      // Check AI status through service worker
+      const response = await this.sendMessage({ action: 'checkAIAvailability' });
+
+      const aiAvailable = response.available || false;
+      const statusMessage = response.statusMessage || 'Unknown';
+      const detailedStatus = response.detailedStatus || '';
+      const action = response.action;
+      const status = response.status || 'unknown-error';
+
+      console.log('AI Status from service worker:', response);
+
       const statusDot = document.getElementById('statusDot');
       const statusText = document.getElementById('statusText');
       const aiNotAvailable = document.getElementById('aiNotAvailable');
       const mainInterface = document.getElementById('mainInterface');
+      const errorDetail = document.getElementById('errorDetail');
+      const errorAction = document.getElementById('errorAction');
 
       if (aiAvailable) {
         statusDot.className = 'status-dot available';
@@ -78,17 +127,43 @@ class PopupManager {
         aiNotAvailable.style.display = 'none';
         mainInterface.style.display = 'block';
       } else {
-        statusDot.className = 'status-dot unavailable';
+        // Set status indicator
+        statusDot.className = `status-dot unavailable status-${status}`;
         statusText.textContent = statusMessage;
         statusText.title = detailedStatus;
+
+        // Update error message details
+        if (errorDetail) {
+          errorDetail.textContent = detailedStatus;
+        }
+
+        // Update action message if provided
+        if (errorAction && action) {
+          errorAction.textContent = action;
+          errorAction.style.display = 'block';
+        } else if (errorAction) {
+          errorAction.style.display = 'none';
+        }
+
         aiNotAvailable.style.display = 'block';
         mainInterface.style.display = 'none';
-        
-        // Log detailed status for debugging
-        console.log('AI Status Details:', detailedStatus);
+
+        // Retry once after 500ms if AI isn't available (race condition with service worker init)
+        if (retryCount === 0 && status === 'unknown-error') {
+          console.log('AI status unknown, retrying in 500ms...');
+          setTimeout(() => this.checkAIStatus(1), 500);
+        }
       }
     } catch (error) {
       console.error('Error checking AI status:', error);
+
+      // Retry once after 500ms on error (service worker may still be initializing)
+      if (retryCount === 0) {
+        console.log('Error checking AI status, retrying in 500ms...');
+        setTimeout(() => this.checkAIStatus(1), 500);
+        return;
+      }
+
       document.getElementById('statusText').textContent = 'Error';
       document.getElementById('statusText').title = error.message;
       document.getElementById('statusDot').className = 'status-dot unavailable';
@@ -113,44 +188,103 @@ class PopupManager {
     async analyzeAllTabs() {
         const button = document.getElementById('analyzeTabsBtn');
         const results = document.getElementById('results');
-        
+
         try {
+            // Check if double-click (within 5 seconds) to force refresh
+            const now = Date.now();
+            const timeSinceLastClick = now - this.lastAnalysisClick;
+            const forceRefresh = timeSinceLastClick < 5000;
+            this.lastAnalysisClick = now;
+
             // Show loading state
             button.disabled = true;
-            button.textContent = '🤖 Analyzing...';
+            button.textContent = forceRefresh ? '🔄 Refreshing...' : '🤖 Starting...';
             results.style.display = 'none';
 
-            const response = await this.sendMessage({ action: 'analyzeAllTabs' });
+            const response = await this.sendMessage({
+                action: 'analyzeAllTabs',
+                forceRefresh: forceRefresh
+            });
 
             if (response.error) {
-                if (response.requiresPermission) {
-                    // Handle large number of tabs
-                    const proceed = confirm(
-                        `You have ${response.tabCount} tabs open. This may take a while to analyze. ` +
-                        `Would you like to proceed?`
-                    );
-                    
-                    if (proceed) {
-                        // Retry with permission
-                        const retryResponse = await this.sendMessage({ 
-                            action: 'analyzeAllTabs', 
-                            forceAnalyze: true 
-                        });
-                        this.displayResults(retryResponse);
-                    }
-                } else {
-                    this.showError(response.error);
-                }
-            } else {
+                this.showError(response.error);
+                button.disabled = false;
+                button.textContent = '🤖 Analyze & Group Tabs';
+            } else if (response.cached) {
+                // Using cached results
                 this.displayResults(response);
+                this.showInfo(response.message + ' (Click again to force refresh)');
+                button.disabled = false;
+                button.textContent = '🤖 Analyze & Group Tabs';
+            } else if (response.started) {
+                // Background analysis started
+                this.showInfo(response.message);
+                this.startProgressMonitoring();
+            } else if (response.message) {
+                // No tabs to analyze
+                this.showInfo(response.message);
+                button.disabled = false;
+                button.textContent = '🤖 Analyze & Group Tabs';
+            } else {
+                // Immediate results
+                this.displayResults(response);
+                button.disabled = false;
+                button.textContent = '🤖 Analyze & Group Tabs';
             }
         } catch (error) {
             console.error('Error analyzing tabs:', error);
             this.showError(error.message);
-        } finally {
             button.disabled = false;
             button.textContent = '🤖 Analyze & Group Tabs';
         }
+    }
+
+    startProgressMonitoring() {
+        const button = document.getElementById('analyzeTabsBtn');
+        const results = document.getElementById('results');
+
+        // Poll for progress every 500ms
+        this.progressInterval = setInterval(async () => {
+            try {
+                const progressResponse = await this.sendMessage({ action: 'getAnalysisProgress' });
+
+                if (progressResponse.inProgress) {
+                    const progress = progressResponse.progress;
+                    button.textContent = `🤖 Analyzing ${progress.current}/${progress.total}...`;
+                } else if (progressResponse.progress.status === 'complete') {
+                    // Analysis complete, fetch results
+                    clearInterval(this.progressInterval);
+                    const resultsResponse = await this.sendMessage({ action: 'getLastAnalysisResults' });
+
+                    if (resultsResponse.results) {
+                        this.displayResults(resultsResponse.results);
+                    }
+
+                    button.disabled = false;
+                    button.textContent = '🤖 Analyze & Group Tabs';
+                } else if (progressResponse.progress.status === 'error') {
+                    clearInterval(this.progressInterval);
+                    this.showError('Analysis failed. Check console for details.');
+                    button.disabled = false;
+                    button.textContent = '🤖 Analyze & Group Tabs';
+                }
+            } catch (error) {
+                console.error('Error checking progress:', error);
+                clearInterval(this.progressInterval);
+                button.disabled = false;
+                button.textContent = '🤖 Analyze & Group Tabs';
+            }
+        }, 500);
+    }
+
+    showInfo(message) {
+        const results = document.getElementById('results');
+        results.innerHTML = `
+            <div class="result-item" style="background: #e3f2fd; border-left: 4px solid #2196f3;">
+                <strong>ℹ️ ${message}</strong>
+            </div>
+        `;
+        results.style.display = 'block';
     }
 
     async findDuplicates() {
@@ -216,7 +350,7 @@ class PopupManager {
                     const index = parseInt(event.target.getAttribute('data-suggestion-index'));
                     const suggestion = this.currentSuggestions[index];
                     if (suggestion) {
-                        this.createGroup(suggestion);
+                        this.createGroup(suggestion, index);
                     }
                 });
             });
@@ -259,25 +393,71 @@ class PopupManager {
         results.style.display = 'block';
     }
 
-    async createGroup(suggestion) {
+    async createGroup(suggestion, suggestionIndex) {
         try {
             console.log('Creating group with suggestion:', suggestion);
-            const response = await this.sendMessage({ 
-                action: 'createGroups', 
-                groups: [suggestion] 
+            const response = await this.sendMessage({
+                action: 'createGroups',
+                groups: [suggestion]
             });
 
             console.log('Create group response:', response);
 
             if (response[0]?.success) {
-                this.showSuccess(`Created group "${suggestion.groupName}" with ${suggestion.tabs.length} tabs`);
+                // Remove the created suggestion from the list
+                this.currentSuggestions.splice(suggestionIndex, 1);
+
+                // Re-display remaining suggestions
+                if (this.currentSuggestions.length > 0) {
+                    this.displayResults({ suggestions: this.currentSuggestions });
+                    // Add success message above the results without clearing them
+                    const results = document.getElementById('results');
+                    const successMsg = document.createElement('div');
+                    successMsg.className = 'result-item';
+                    successMsg.style.background = '#e3f2fd';
+                    successMsg.style.borderLeftColor = '#10b981';
+                    successMsg.innerHTML = `<strong>✅ Created group "${suggestion.groupName}" with ${response[0].tabCount} tabs. ${this.currentSuggestions.length} suggestions remaining.</strong>`;
+                    results.insertBefore(successMsg, results.firstChild);
+                } else {
+                    this.showSuccess(`✅ Created group "${suggestion.groupName}" with ${response[0].tabCount} tabs. No more suggestions.`);
+                }
+
                 await this.updateTabStats();
+
+                // Update cached results to reflect the removal
+                this.updateCachedResults();
             } else {
-                this.showError(response[0]?.error || 'Failed to create group');
+                const errorMsg = response[0]?.error || 'Failed to create group';
+                this.showError(errorMsg);
+
+                // If no ungrouped tabs, remove this suggestion
+                if (errorMsg === 'No ungrouped tabs available') {
+                    this.currentSuggestions.splice(suggestionIndex, 1);
+                    if (this.currentSuggestions.length > 0) {
+                        this.displayResults({ suggestions: this.currentSuggestions });
+                    }
+                }
             }
         } catch (error) {
             console.error('Error creating group:', error);
             this.showError(error.message);
+        }
+    }
+
+    async updateCachedResults() {
+        try {
+            // Update the stored cache with remaining suggestions
+            const stored = await chrome.storage.local.get(['lastAnalysisResults', 'lastAnalysisTime', 'lastAnalysisTabCount']);
+            if (stored.lastAnalysisResults) {
+                stored.lastAnalysisResults.suggestions = this.currentSuggestions;
+                await chrome.storage.local.set({
+                    lastAnalysisResults: stored.lastAnalysisResults,
+                    lastAnalysisTime: stored.lastAnalysisTime,
+                    lastAnalysisTabCount: stored.lastAnalysisTabCount
+                });
+            }
+        } catch (error) {
+            console.error('Error updating cached results:', error);
         }
     }
 
@@ -306,12 +486,10 @@ class PopupManager {
     }
 
     openFullInterface() {
-        // TODO: Implement full-page interface
-        alert('Full interface coming soon! This will provide drag-and-drop tab management.');
-        // chrome.tabs.create({
-        //     url: chrome.runtime.getURL('full-interface/index.html')
-        // });
-        // window.close();
+        chrome.tabs.create({
+            url: chrome.runtime.getURL('full-interface/dist/index.html')
+        });
+        window.close();
     }
 
     openSettings() {
@@ -376,7 +554,7 @@ class PopupManager {
                 const originalText = clearCacheBtn.textContent;
                 clearCacheBtn.textContent = '✅ Cache Cleared';
                 clearCacheBtn.disabled = true;
-                
+
                 setTimeout(() => {
                     clearCacheBtn.textContent = originalText;
                     clearCacheBtn.disabled = false;
@@ -384,6 +562,156 @@ class PopupManager {
             }
         } catch (error) {
             console.error('Failed to clear cache:', error);
+        }
+    }
+
+    async copyDebugInfo() {
+        const debugBtn = document.getElementById('debugBtn');
+        const originalText = debugBtn.textContent;
+
+        try {
+            debugBtn.disabled = true;
+            debugBtn.textContent = '⏳ Collecting...';
+
+            // Gather all diagnostic info
+            const aiStatus = await this.sendMessage({ action: 'checkAIAvailability' });
+            const progress = await this.sendMessage({ action: 'getAnalysisProgress' });
+            const cacheStats = await this.sendMessage({ action: 'getCacheStats' });
+            const lastResults = await this.sendMessage({ action: 'getLastAnalysisResults' });
+            const tabs = await chrome.tabs.query({});
+            const groups = await chrome.tabGroups.query({});
+
+            const debugInfo = {
+                timestamp: new Date().toISOString(),
+                extension_version: chrome.runtime.getManifest().version,
+                browser: navigator.userAgent,
+
+                ai_status: {
+                    available: aiStatus.available,
+                    status: aiStatus.status,
+                    message: aiStatus.statusMessage,
+                    detail: aiStatus.detailedStatus
+                },
+
+                analysis_state: {
+                    in_progress: progress.inProgress,
+                    current: progress.progress?.current || 0,
+                    total: progress.progress?.total || 0,
+                    status: progress.progress?.status || 'unknown'
+                },
+
+                cache: {
+                    stats: cacheStats.stats,
+                    last_analysis_time: lastResults.timestamp ? new Date(lastResults.timestamp).toISOString() : 'never',
+                    last_results_count: lastResults.results?.suggestions?.length || 0
+                },
+
+                tabs: {
+                    total: tabs.length,
+                    grouped: tabs.filter(t => t.groupId !== -1).length,
+                    ungrouped: tabs.filter(t => t.groupId === -1).length,
+                    special_pages: tabs.filter(t =>
+                        t.url?.startsWith('chrome://') ||
+                        t.url?.startsWith('chrome-extension://') ||
+                        t.url?.startsWith('about:')
+                    ).length,
+                    groups_count: groups.length
+                },
+
+                sample_tabs: tabs.slice(0, 5).map(t => ({
+                    id: t.id,
+                    title: t.title?.substring(0, 50),
+                    url: t.url?.substring(0, 80),
+                    groupId: t.groupId
+                })),
+
+                analysis_details: lastResults.results ? {
+                    total_analyzed: lastResults.results.analyses?.length || 0,
+                    categories_found: (() => {
+                        const categoryMap = {};
+                        (lastResults.results.analyses || []).forEach(a => {
+                            const cat = a.category || 'Unknown';
+                            categoryMap[cat] = (categoryMap[cat] || 0) + 1;
+                        });
+                        return categoryMap;
+                    })(),
+                    existing_groups: lastResults.results.existingGroups || [],
+                    suggestions_breakdown: lastResults.results.suggestions?.map(s => ({
+                        name: s.groupName,
+                        type: s.isAddToExisting ? 'add_to_existing' : 'create_new',
+                        tab_count: s.tabs?.length || 0,
+                        confidence: Math.round((s.confidence || 0) * 100)
+                    })) || []
+                } : null
+            };
+
+            // Format as readable text
+            const debugText = `Better Tabs AI - Debug Report
+Generated: ${debugInfo.timestamp}
+Extension Version: ${debugInfo.extension_version}
+
+=== AI STATUS ===
+Available: ${debugInfo.ai_status.available}
+Status: ${debugInfo.ai_status.status}
+Message: ${debugInfo.ai_status.message}
+Detail: ${debugInfo.ai_status.detail}
+
+=== ANALYSIS STATE ===
+In Progress: ${debugInfo.analysis_state.in_progress}
+Progress: ${debugInfo.analysis_state.current}/${debugInfo.analysis_state.total}
+Status: ${debugInfo.analysis_state.status}
+
+=== CACHE ===
+Size: ${debugInfo.cache.stats?.size || 0}/${debugInfo.cache.stats?.maxSize || 0}
+Hits: ${debugInfo.cache.stats?.hits || 0}
+Misses: ${debugInfo.cache.stats?.misses || 0}
+Hit Rate: ${((debugInfo.cache.stats?.hitRate || 0) * 100).toFixed(1)}%
+Last Analysis: ${debugInfo.cache.last_analysis_time}
+Last Results: ${debugInfo.cache.last_results_count} suggestions
+
+=== TABS ===
+Total: ${debugInfo.tabs.total}
+Ungrouped: ${debugInfo.tabs.ungrouped}
+Grouped: ${debugInfo.tabs.grouped}
+Special Pages: ${debugInfo.tabs.special_pages}
+Groups: ${debugInfo.tabs.groups_count}
+
+=== SAMPLE TABS (first 5) ===
+${debugInfo.sample_tabs.map((t, i) => `${i+1}. [${t.groupId}] ${t.title}\n   ${t.url}`).join('\n')}
+
+=== ANALYSIS DETAILS ===
+${debugInfo.analysis_details ? `
+Total Tabs Analyzed: ${debugInfo.analysis_details.total_analyzed}
+Categories Found: ${JSON.stringify(debugInfo.analysis_details.categories_found, null, 2)}
+Existing Groups: ${JSON.stringify(debugInfo.analysis_details.existing_groups, null, 2)}
+Suggestions: ${debugInfo.analysis_details.suggestions_breakdown.length} total
+${debugInfo.analysis_details.suggestions_breakdown.map((s, i) =>
+  `  ${i+1}. ${s.name} [${s.type}] - ${s.tab_count} tab(s), ${s.confidence}% confidence`
+).join('\n')}
+` : 'No analysis results available'}
+
+=== BROWSER ===
+${debugInfo.browser}
+
+=== RAW JSON ===
+${JSON.stringify(debugInfo, null, 2)}
+`;
+
+            // Copy to clipboard
+            await navigator.clipboard.writeText(debugText);
+
+            debugBtn.textContent = '✅ Copied!';
+            setTimeout(() => {
+                debugBtn.textContent = originalText;
+                debugBtn.disabled = false;
+            }, 2000);
+
+            this.showSuccess('Debug info copied to clipboard! Paste it to share.');
+        } catch (error) {
+            console.error('Failed to collect debug info:', error);
+            this.showError('Failed to collect debug info: ' + error.message);
+            debugBtn.textContent = originalText;
+            debugBtn.disabled = false;
         }
     }
 

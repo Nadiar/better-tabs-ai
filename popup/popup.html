@@ -22,21 +22,30 @@
         <main>
             <div id="aiNotAvailable" class="error-message" style="display: none;">
                 <h3>⚠️ Chrome AI Not Available</h3>
-                <p>This extension requires Chrome's built-in AI (Gemini Nano).</p>
-                <p><strong>Troubleshooting Steps:</strong></p>
-                <ol style="text-align: left; font-size: 12px; margin-left: 20px;">
-                    <li>Go to <code>chrome://flags</code></li>
-                    <li>Search for "Prompt API for Gemini Nano"</li>
-                    <li>Set it to "Enabled"</li>
-                    <li>Restart Chrome completely</li>
-                    <li>Check <code>chrome://on-device-internals</code> for model status</li>
-                </ol>
-                <p><strong>Requirements:</strong></p>
-                <ul style="text-align: left; font-size: 11px; margin-left: 20px;">
-                    <li>Chrome 118+ with AI features enabled</li>
-                    <li>At least 4GB GPU memory</li>
-                    <li>22GB free storage space</li>
-                </ul>
+                <p id="errorDetail" style="font-weight: 600; margin-bottom: 10px;">
+                    Checking AI availability...
+                </p>
+                <p id="errorAction" style="font-size: 12px; background: #f0f0f0; padding: 8px; border-radius: 4px; margin: 10px 0;">
+                    Please wait...
+                </p>
+                <details style="margin-top: 10px;">
+                    <summary style="cursor: pointer; font-weight: 600;">Troubleshooting Steps</summary>
+                    <ol style="text-align: left; font-size: 12px; margin-left: 20px; margin-top: 10px;">
+                        <li>Go to <code>chrome://flags</code></li>
+                        <li>Search for "Prompt API for Gemini Nano"</li>
+                        <li>Set it to "Enabled"</li>
+                        <li>Restart Chrome completely</li>
+                        <li>Check <code>chrome://on-device-internals</code> for model status</li>
+                    </ol>
+                </details>
+                <details style="margin-top: 10px;">
+                    <summary style="cursor: pointer; font-weight: 600;">System Requirements</summary>
+                    <ul style="text-align: left; font-size: 11px; margin-left: 20px; margin-top: 10px;">
+                        <li>Chrome 118+ with AI features enabled</li>
+                        <li>At least 4GB GPU memory</li>
+                        <li>22GB free storage space</li>
+                    </ul>
+                </details>
                 <button id="recheckAI" class="secondary-btn" style="margin-top: 10px;">
                     🔄 Check Again
                 </button>
@@ -54,6 +63,10 @@
                     
                     <button id="clearCacheBtn" class="secondary-btn">
                         🧹 Clear Cache
+                    </button>
+
+                    <button id="debugBtn" class="secondary-btn">
+                        🔍 Debug Info
                     </button>
                 </div>
 
@@ -78,7 +91,7 @@
 
         <footer>
             <button id="openFullInterface" class="link-btn">
-                � Full Interface (Coming Soon)
+                🎯 Full Interface
             </button>
             <button id="settingsBtn" class="link-btn">
                 🚧 Settings (Coming Soon)

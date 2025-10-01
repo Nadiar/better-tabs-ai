@@ -1,12 +1,189 @@
 // Better Tabs AI - Service Worker
 // Handles AI processing and tab management
 
+// Import cache manager (inline since service workers don't support ES6 imports)
+// Cache Manager - LRU cache with content-based invalidation (no TTL)
+class CacheManager {
+  constructor(options = {}) {
+    this.maxSize = options.maxSize || 100;
+    this.cache = new Map();
+    this.accessOrder = [];
+    this.stats = { hits: 0, misses: 0, evictions: 0, invalidations: 0 };
+  }
+
+  generateKey(metadata, content = null) {
+    const baseKey = `${metadata.url}_${metadata.title}`;
+    if (content && content.excerpt) {
+      const contentHash = this._simpleHash(content.excerpt.substring(0, 200));
+      return `${baseKey}_${contentHash}`;
+    }
+    return baseKey;
+  }
+
+  get(key) {
+    const entry = this.cache.get(key);
+    if (!entry) {
+      this.stats.misses++;
+      return null;
+    }
+
+    // No TTL check - cache is valid until content changes (detected by hash in key)
+    // This allows cache to work indefinitely for unchanged pages
+    entry.accessCount++;
+    entry.lastAccess = Date.now();
+    this._updateAccessOrder(key);
+    this.stats.hits++;
+    return entry.value;
+  }
+
+  set(key, value, options = {}) {
+    if (this.cache.size >= this.maxSize && !this.cache.has(key)) {
+      this._evictLRU();
+    }
+
+    this.cache.set(key, {
+      value,
+      timestamp: Date.now(),
+      lastAccess: Date.now(),
+      accessCount: 0,
+      contentHash: options.contentHash || null
+    });
+
+    this._updateAccessOrder(key);
+  }
+
+  invalidate(key) {
+    if (this.cache.delete(key)) {
+      this._removeFromAccessOrder(key);
+      this.stats.invalidations++;
+      return true;
+    }
+    return false;
+  }
+
+  invalidateByUrl(url) {
+    let count = 0;
+    for (const key of this.cache.keys()) {
+      if (key.startsWith(url)) {
+        this.cache.delete(key);
+        this._removeFromAccessOrder(key);
+        count++;
+      }
+    }
+    this.stats.invalidations += count;
+    return count;
+  }
+
+  clear() {
+    const size = this.cache.size;
+    this.cache.clear();
+    this.accessOrder = [];
+    this.stats.invalidations += size;
+  }
+
+  getStats() {
+    return {
+      ...this.stats,
+      size: this.cache.size,
+      maxSize: this.maxSize,
+      hitRate: this.stats.hits / (this.stats.hits + this.stats.misses) || 0
+    };
+  }
+
+  _evictLRU() {
+    if (this.accessOrder.length === 0) return;
+    const lruKey = this.accessOrder.shift();
+    this.cache.delete(lruKey);
+    this.stats.evictions++;
+  }
+
+  _updateAccessOrder(key) {
+    this._removeFromAccessOrder(key);
+    this.accessOrder.push(key);
+  }
+
+  _removeFromAccessOrder(key) {
+    const index = this.accessOrder.indexOf(key);
+    if (index > -1) {
+      this.accessOrder.splice(index, 1);
+    }
+  }
+
+  _simpleHash(str) {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash;
+    }
+    return Math.abs(hash).toString(36);
+  }
+}
+
+// AI Status enum and error messages
+const AIStatus = {
+  READY: 'ready',
+  DOWNLOADING: 'downloading',
+  DOWNLOAD_REQUIRED: 'download-required',
+  FLAGS_DISABLED: 'flags-disabled',
+  GPU_UNAVAILABLE: 'gpu-unavailable',
+  STORAGE_FULL: 'storage-full',
+  UNSUPPORTED_BROWSER: 'unsupported-browser',
+  UNKNOWN_ERROR: 'unknown-error'
+};
+
+const AIStatusMessages = {
+  [AIStatus.READY]: {
+    short: 'AI Ready',
+    detail: 'Gemini Nano is ready to use',
+    action: null
+  },
+  [AIStatus.DOWNLOADING]: {
+    short: 'Downloading AI Model',
+    detail: 'Gemini Nano model is being downloaded. This may take several minutes.',
+    action: 'Check progress at chrome://on-device-internals'
+  },
+  [AIStatus.DOWNLOAD_REQUIRED]: {
+    short: 'Download Required',
+    detail: 'Gemini Nano model needs to be downloaded (approximately 22GB)',
+    action: 'Visit chrome://on-device-internals to download'
+  },
+  [AIStatus.FLAGS_DISABLED]: {
+    short: 'Chrome Flags Disabled',
+    detail: 'Prompt API for Gemini Nano is not enabled in Chrome flags',
+    action: 'Enable at chrome://flags/#prompt-api-for-gemini-nano'
+  },
+  [AIStatus.GPU_UNAVAILABLE]: {
+    short: 'GPU Not Available',
+    detail: 'Gemini Nano requires at least 4GB GPU memory',
+    action: 'Check system requirements'
+  },
+  [AIStatus.STORAGE_FULL]: {
+    short: 'Insufficient Storage',
+    detail: 'Need at least 22GB free storage for Gemini Nano model',
+    action: 'Free up disk space'
+  },
+  [AIStatus.UNSUPPORTED_BROWSER]: {
+    short: 'Unsupported Browser',
+    detail: 'Requires Chrome 118+ with AI features',
+    action: 'Update Chrome to latest version'
+  },
+  [AIStatus.UNKNOWN_ERROR]: {
+    short: 'Unknown Error',
+    detail: 'Unable to determine AI availability',
+    action: 'Check console for details'
+  }
+};
+
 class BetterTabsAI {
   constructor() {
     this.session = null;
     this.sessionCreated = false;
     this.isAIAvailable = false;
-    this.analysisCache = new Map();
+    this.aiStatus = AIStatus.UNKNOWN_ERROR;
+    this.cacheManager = new CacheManager({ maxSize: 100 });
+    this.analysisInProgress = false;
+    this.analysisProgress = { current: 0, total: 0, status: 'idle' };
     this.init();
   }
 
@@ -34,49 +211,83 @@ class BetterTabsAI {
         try {
           const availability = await self.ai.languageModel.availability();
           console.log('AI Availability:', availability);
-          
+
           if (availability === 'readily-available') {
             this.isAIAvailable = true;
+            this.aiStatus = AIStatus.READY;
             console.log('✅ Gemini Nano is ready to use');
           } else if (availability === 'after-download') {
             this.isAIAvailable = false;
+            this.aiStatus = AIStatus.DOWNLOAD_REQUIRED;
             console.log('🟡 Gemini Nano needs to be downloaded');
+          } else if (availability === 'downloading') {
+            this.isAIAvailable = false;
+            this.aiStatus = AIStatus.DOWNLOADING;
+            console.log('⏳ Gemini Nano is downloading');
           } else {
             this.isAIAvailable = false;
+            this.aiStatus = AIStatus.UNKNOWN_ERROR;
             console.log('❌ Gemini Nano not available:', availability);
           }
         } catch (error) {
           console.log('Error checking ai.languageModel availability:', error);
           this.isAIAvailable = false;
+          this._interpretError(error);
         }
       } else if (typeof LanguageModel !== 'undefined') {
         console.log('Found LanguageModel API');
         try {
           const availability = await LanguageModel.availability();
           console.log('AI Availability:', availability);
-          
+
           if (availability === 'available') {
             this.isAIAvailable = true;
+            this.aiStatus = AIStatus.READY;
             console.log('✅ Gemini Nano is ready to use');
-          } else if (availability === 'downloadable' || availability === 'downloading') {
+          } else if (availability === 'downloadable') {
             this.isAIAvailable = false;
-            console.log('🟡 Gemini Nano needs download:', availability);
+            this.aiStatus = AIStatus.DOWNLOAD_REQUIRED;
+            console.log('🟡 Gemini Nano needs download');
+          } else if (availability === 'downloading') {
+            this.isAIAvailable = false;
+            this.aiStatus = AIStatus.DOWNLOADING;
+            console.log('⏳ Gemini Nano is downloading');
           } else {
             this.isAIAvailable = false;
+            this.aiStatus = AIStatus.UNKNOWN_ERROR;
             console.log('❌ Gemini Nano not available:', availability);
           }
         } catch (error) {
           console.log('Error checking LanguageModel availability:', error);
           this.isAIAvailable = false;
+          this._interpretError(error);
         }
       } else {
         console.log('❌ No AI APIs found');
         console.log('Available globals:', Object.keys(self).filter(k => k.toLowerCase().includes('ai') || k.toLowerCase().includes('language')));
         this.isAIAvailable = false;
+        this.aiStatus = AIStatus.FLAGS_DISABLED;
       }
     } catch (error) {
       console.error('Error checking AI availability:', error);
       this.isAIAvailable = false;
+      this._interpretError(error);
+    }
+  }
+
+  _interpretError(error) {
+    const errorMsg = error.message?.toLowerCase() || '';
+
+    if (errorMsg.includes('gpu') || errorMsg.includes('graphics')) {
+      this.aiStatus = AIStatus.GPU_UNAVAILABLE;
+    } else if (errorMsg.includes('storage') || errorMsg.includes('disk') || errorMsg.includes('space')) {
+      this.aiStatus = AIStatus.STORAGE_FULL;
+    } else if (errorMsg.includes('flag') || errorMsg.includes('disabled')) {
+      this.aiStatus = AIStatus.FLAGS_DISABLED;
+    } else if (errorMsg.includes('version') || errorMsg.includes('browser')) {
+      this.aiStatus = AIStatus.UNSUPPORTED_BROWSER;
+    } else {
+      this.aiStatus = AIStatus.UNKNOWN_ERROR;
     }
   }
 
@@ -87,12 +298,20 @@ class BetterTabsAI {
       return true; // Keep message channel open for async responses
     });
 
-    // Listen for tab updates (for future real-time features)
+    // Listen for tab updates and invalidate cache
     chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-      if (changeInfo.status === 'complete') {
-        // Tab finished loading - could trigger analysis in future versions
-        console.log('Tab updated:', tab.title);
+      if (changeInfo.status === 'complete' && tab.url) {
+        // Tab finished loading - invalidate cache for this URL
+        const invalidated = this.cacheManager.invalidateByUrl(tab.url);
+        if (invalidated > 0) {
+          console.log(`Cache invalidated for ${tab.url}: ${invalidated} entries`);
+        }
       }
+    });
+
+    // Listen for tab removal to clean up cache
+    chrome.tabs.onRemoved.addListener((tabId, removeInfo) => {
+      // Cache will naturally expire, but we could add cleanup here if needed
     });
   }
 
@@ -101,11 +320,18 @@ class BetterTabsAI {
       switch (message.action) {
         case 'checkAIAvailability':
           await this.checkAIAvailability();
-          sendResponse({ available: this.isAIAvailable });
+          const statusInfo = AIStatusMessages[this.aiStatus];
+          sendResponse({
+            available: this.isAIAvailable,
+            status: this.aiStatus,
+            statusMessage: statusInfo.short,
+            detailedStatus: statusInfo.detail,
+            action: statusInfo.action
+          });
           break;
 
         case 'analyzeAllTabs':
-          const result = await this.analyzeAllTabs();
+          const result = await this.analyzeAllTabs(message.forceRefresh || false);
           sendResponse(result);
           break;
 
@@ -129,10 +355,34 @@ class BetterTabsAI {
           sendResponse(duplicates);
           break;
 
+        case 'generateGroupName':
+          const groupName = await this.generateGroupName(message.tabs);
+          sendResponse(groupName);
+          break;
+
         case 'clearCache':
-          this.analysisCache.clear();
+          this.cacheManager.clear();
           console.log('🧹 Analysis cache cleared');
-          sendResponse({ success: true });
+          sendResponse({ success: true, stats: this.cacheManager.getStats() });
+          break;
+
+        case 'getCacheStats':
+          sendResponse({ stats: this.cacheManager.getStats() });
+          break;
+
+        case 'getAnalysisProgress':
+          sendResponse({
+            inProgress: this.analysisInProgress,
+            progress: this.analysisProgress
+          });
+          break;
+
+        case 'getLastAnalysisResults':
+          const stored = await chrome.storage.local.get(['lastAnalysisResults', 'lastAnalysisTime']);
+          sendResponse({
+            results: stored.lastAnalysisResults || null,
+            timestamp: stored.lastAnalysisTime || null
+          });
           break;
 
         default:
@@ -209,77 +459,194 @@ class BetterTabsAI {
     }
   }
 
-  async analyzeAllTabs() {
+  isTabGroupable(tab) {
+    // Filter out tabs that shouldn't be grouped
+    const url = tab.url || '';
+    const title = tab.title || '';
+
+    // Skip special Chrome pages
+    if (url.startsWith('chrome://') ||
+        url.startsWith('chrome-extension://') ||
+        url.startsWith('edge://') ||
+        url.startsWith('about:') ||
+        url.startsWith('file://')) {
+      return false;
+    }
+
+    // Skip empty or new tabs
+    if (!url || url === 'about:blank' || title === 'New Tab') {
+      return false;
+    }
+
+    // Skip already grouped tabs
+    if (tab.groupId !== -1) {
+      return false;
+    }
+
+    return true;
+  }
+
+  async analyzeAllTabs(forceRefresh = false) {
     try {
       if (!this.isAIAvailable) {
         return { error: 'AI not available', requiresSetup: true };
       }
 
-      // Check cache first - tabs change frequently so shorter cache
-      const cacheKey = 'all_tabs_analysis';
-      const cached = this.analysisCache.get(cacheKey);
-      
-      // Use cache if less than 1 minute old
-      if (cached && (Date.now() - cached.timestamp) < 60000) {
-        console.log('📋 Using cached tab analysis results');
-        return cached.result;
+      // Check if already running
+      if (this.analysisInProgress) {
+        return {
+          error: 'Analysis already in progress',
+          progress: this.analysisProgress
+        };
       }
 
       // Get all tabs
       const tabs = await chrome.tabs.query({});
-      console.log(`Analyzing ${tabs.length} tabs`);
 
-      // Check if we have a large number of tabs
-      if (tabs.length > 50) {
-        return { 
-          error: 'Large number of tabs detected', 
-          tabCount: tabs.length,
-          requiresPermission: true 
+      // Filter to only groupable tabs
+      const groupableTabs = tabs.filter(tab => this.isTabGroupable(tab));
+      console.log(`Found ${groupableTabs.length} groupable tabs (filtered from ${tabs.length} total)`);
+
+      if (groupableTabs.length === 0) {
+        return {
+          totalTabs: tabs.length,
+          ungroupedTabs: 0,
+          analyses: [],
+          suggestions: [],
+          message: 'No groupable tabs found (filtered out special pages, new tabs, and already grouped tabs)'
         };
       }
 
-      // Filter out already grouped tabs initially
-      const ungroupedTabs = tabs.filter(tab => tab.groupId === -1);
-      console.log(`Found ${ungroupedTabs.length} ungrouped tabs`);
+      // Check for cached results unless force refresh
+      if (!forceRefresh) {
+        const stored = await chrome.storage.local.get(['lastAnalysisResults', 'lastAnalysisTime', 'lastAnalysisTabCount']);
+        if (stored.lastAnalysisResults && stored.lastAnalysisTime) {
+          const age = Date.now() - stored.lastAnalysisTime;
+          const tabCountChanged = stored.lastAnalysisTabCount !== groupableTabs.length;
 
-      const results = {
-        totalTabs: tabs.length,
-        ungroupedTabs: ungroupedTabs.length,
-        analyses: [],
-        suggestions: []
-      };
-
-      // Analyze each ungrouped tab
-      for (const tab of ungroupedTabs) {
-        try {
-          const analysis = await this.analyzeTab(tab.id, tab);
-          if (analysis && !analysis.error) {
-            results.analyses.push({
-              tabId: tab.id,
-              ...analysis
-            });
+          // Use cached results if tab count hasn't changed
+          if (!tabCountChanged) {
+            console.log('✅ Using cached analysis results (age:', Math.round(age / 1000), 'seconds, tab count unchanged)');
+            return {
+              ...stored.lastAnalysisResults,
+              cached: true,
+              cacheAge: age,
+              message: `Using cached analysis (${Math.round(age / 1000)}s old)`
+            };
+          } else {
+            console.log('🔄 Tab count changed:', stored.lastAnalysisTabCount, '→', groupableTabs.length, '- refreshing analysis');
           }
-        } catch (error) {
-          console.error(`Error analyzing tab ${tab.id}:`, error);
         }
       }
 
-      // Generate grouping suggestions
-      if (results.analyses.length > 0) {
-        results.suggestions = await this.suggestGroups(results.analyses);
-      }
+      // Start background analysis
+      this.analysisInProgress = true;
+      this.analysisProgress = {
+        current: 0,
+        total: groupableTabs.length,
+        status: 'analyzing'
+      };
 
-      // Cache the results
-      this.analysisCache.set(cacheKey, {
-        result: results,
-        timestamp: Date.now()
+      // Run analysis in background (don't await)
+      this.performBackgroundAnalysis(groupableTabs).catch(error => {
+        console.error('Background analysis failed:', error);
+        this.analysisInProgress = false;
+        this.analysisProgress.status = 'error';
       });
 
-      return results;
+      // Return immediately with status
+      return {
+        started: true,
+        totalTabs: tabs.length,
+        analyzingTabs: groupableTabs.length,
+        message: 'Analysis started in background. Close popup if needed - results will be saved.',
+        progress: this.analysisProgress
+      };
     } catch (error) {
       console.error('Error in analyzeAllTabs:', error);
+      this.analysisInProgress = false;
       return { error: error.message };
     }
+  }
+
+  async performBackgroundAnalysis(tabs) {
+    const results = {
+      totalTabs: tabs.length,
+      analyses: [],
+      suggestions: [],
+      cacheStats: this.cacheManager.getStats()
+    };
+
+    // Process in batches of 5 for better concurrency
+    const BATCH_SIZE = 5;
+    for (let i = 0; i < tabs.length; i += BATCH_SIZE) {
+      const batch = tabs.slice(i, Math.min(i + BATCH_SIZE, tabs.length));
+
+      // Analyze batch concurrently with timeout
+      const batchPromises = batch.map(async (tab) => {
+        try {
+          // Add 30 second timeout per tab
+          const analysisPromise = this.analyzeTab(tab.id, tab);
+          const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Analysis timeout')), 30000)
+          );
+
+          const analysis = await Promise.race([analysisPromise, timeoutPromise]);
+
+          if (analysis && !analysis.error && !analysis.fallback) {
+            return {
+              tabId: tab.id,
+              ...analysis
+            };
+          }
+          return null;
+        } catch (error) {
+          if (error.message === 'Analysis timeout') {
+            console.warn(`⏱️ Timeout analyzing tab ${tab.id}: ${tab.title}`);
+          } else {
+            console.error(`Error analyzing tab ${tab.id}:`, error);
+          }
+          return null;
+        }
+      });
+
+      const batchResults = await Promise.all(batchPromises);
+
+      // Add successful analyses
+      batchResults.forEach(result => {
+        if (result) {
+          results.analyses.push(result);
+        }
+      });
+
+      // Update progress
+      this.analysisProgress.current = Math.min(i + BATCH_SIZE, tabs.length);
+      console.log(`Progress: ${this.analysisProgress.current}/${this.analysisProgress.total}`);
+    }
+
+    // Generate grouping suggestions
+    if (results.analyses.length > 0) {
+      this.analysisProgress.status = 'grouping';
+      const suggestionResult = await this.suggestGroups(results.analyses);
+      results.suggestions = suggestionResult.suggestions;
+      results.existingGroups = suggestionResult.existingGroups;
+    }
+
+    // Update cache stats
+    results.cacheStats = this.cacheManager.getStats();
+
+    // Store results for popup to retrieve
+    await chrome.storage.local.set({
+      lastAnalysisResults: results,
+      lastAnalysisTime: Date.now(),
+      lastAnalysisTabCount: tabs.length
+    });
+
+    this.analysisInProgress = false;
+    this.analysisProgress.status = 'complete';
+
+    console.log('✅ Background analysis complete:', results);
+    return results;
   }
 
   async analyzeTab(tabId, tabData = null) {
@@ -287,13 +654,6 @@ class BetterTabsAI {
       // Get tab data if not provided
       if (!tabData) {
         tabData = await chrome.tabs.get(tabId);
-      }
-
-      // Check cache first
-      const cacheKey = `${tabData.url}_${tabData.title}`;
-      if (this.analysisCache.has(cacheKey)) {
-        console.log('Using cached analysis for:', tabData.title);
-        return this.analysisCache.get(cacheKey);
       }
 
       // Start with metadata analysis (staged approach)
@@ -316,11 +676,22 @@ class BetterTabsAI {
         console.log('Could not extract content from tab:', error.message);
       }
 
+      // Generate cache key with content hash
+      const cacheKey = this.cacheManager.generateKey(metadata, content);
+
+      // Check cache first
+      const cached = this.cacheManager.get(cacheKey);
+      if (cached) {
+        console.log('✅ Cache hit for:', tabData.title);
+        return cached;
+      }
+
+      console.log('❌ Cache miss for:', tabData.title);
       const analysis = await this.performAIAnalysis(metadata, content);
-      
+
       // Cache the result
-      this.analysisCache.set(cacheKey, analysis);
-      
+      this.cacheManager.set(cacheKey, analysis);
+
       return analysis;
     } catch (error) {
       console.error('Error analyzing tab:', error);
@@ -364,30 +735,24 @@ class BetterTabsAI {
 
   async performAIAnalysis(metadata, content) {
     try {
-      // Don't try to inject into chrome:// or other special URLs
-      if (metadata.url.startsWith('chrome://') || 
-          metadata.url.startsWith('chrome-extension://') ||
-          metadata.url.startsWith('edge://') ||
-          metadata.url.startsWith('about:')) {
-        console.log('Skipping AI analysis for special URL:', metadata.url);
+      // Ensure we have an AI session
+      if (!this.aiSession) {
+        console.log('No AI session available, attempting to create one...');
+        try {
+          await this.createAISession();
+        } catch (error) {
+          console.error('Failed to create AI session:', error);
+          return this.createFallbackAnalysis(metadata);
+        }
+      }
+
+      // If still no session, use fallback
+      if (!this.aiSession) {
+        console.log('AI session unavailable, using fallback analysis');
         return this.createFallbackAnalysis(metadata);
       }
 
-      // Perform AI analysis in a tab context since service workers can't access window.ai
-      const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-      if (tabs.length === 0) {
-        throw new Error('No active tab for AI analysis');
-      }
-
-      // Make sure the active tab is not a special URL either
-      if (tabs[0].url.startsWith('chrome://') || 
-          tabs[0].url.startsWith('chrome-extension://') ||
-          tabs[0].url.startsWith('edge://') ||
-          tabs[0].url.startsWith('about:')) {
-        console.log('Active tab is special URL, using fallback analysis');
-        return this.createFallbackAnalysis(metadata);
-      }
-
+      // Build the analysis prompt
       const prompt = `Analyze this web page and categorize it with specific, granular groupings:
 
 Title: ${metadata.title}
@@ -413,7 +778,9 @@ Examples of good specific categories:
 - "React Development" for React-related pages
 - "Tech News" for technology news articles
 
-Based on this information, provide a JSON response with:
+IMPORTANT: Respond with ONLY the raw JSON object, without any markdown formatting, code blocks, or explanatory text.
+
+Provide a JSON response with this exact structure:
 {
   "category": "specific descriptive category that would be useful for tab grouping",
   "subcategory": "even more specific if needed",
@@ -422,66 +789,233 @@ Based on this information, provide a JSON response with:
   "confidence": 0.8
 }`;
 
-      // Execute AI prompt in tab context
-      const result = await chrome.scripting.executeScript({
-        target: { tabId: tabs[0].id },
-        function: async (promptText) => {
-          try {
-            if (typeof window.ai === 'undefined' || !window.ai.languageModel) {
-              return { error: 'Chrome AI not available' };
-            }
+      // Use the persistent service worker AI session
+      console.log('Sending prompt to AI session...');
+      const response = await this.aiSession.prompt(prompt);
+      console.log('Received AI response (length:', response.length, '):', response.substring(0, 100) + '...');
 
-            // Check availability
-            const availability = await window.ai.languageModel.availability();
-            if (availability !== 'readily-available' && availability !== 'available') {
-              // If downloadable, try to create session anyway to trigger download
-              if (availability !== 'downloadable') {
-                return { error: 'AI not ready', availability };
-              }
-            }
-
-            // Create session for this analysis with language specification
-            const session = await window.ai.languageModel.create({
-              expectedInputs: [{ type: "text", languages: ["en"] }],
-              expectedOutputs: [{ type: "text", languages: ["en"] }]
-            });
-            const response = await session.prompt(promptText);
-            
-            return { success: true, response };
-          } catch (error) {
-            return { error: error.message };
-          }
-        },
-        args: [prompt]
-      });
-
-      const aiResult = result[0]?.result;
-      
-      if (aiResult?.error) {
-        console.error('AI analysis error:', aiResult.error);
-        return this.createFallbackAnalysis(metadata);
+      // Warn if response seems truncated
+      if (response.length < 50) {
+        console.warn('⚠️ Response seems unusually short, may be truncated');
       }
 
-      if (aiResult?.success) {
+      // Parse the response (handle markdown code blocks)
+      try {
+        const parsed = this.extractJSON(response);
+        return {
+          ...parsed,
+          domain: metadata.domain,
+          title: metadata.title,
+          url: metadata.url
+        };
+      } catch (parseError) {
+        console.error('Error parsing AI response:', parseError);
+        console.error('Raw response:', response);
+        return this.createFallbackAnalysis(metadata);
+      }
+    } catch (error) {
+      console.error('Error in AI analysis:', error);
+
+      // If session was destroyed or became invalid, try to recreate it once
+      if (error.message?.includes('session') || error.message?.includes('Session')) {
+        console.log('AI session may be invalid, attempting to recreate...');
+        this.aiSession = null;
         try {
-          const parsed = JSON.parse(aiResult.response);
-          return {
-            ...parsed,
-            domain: metadata.domain,
-            title: metadata.title,
-            url: metadata.url
-          };
-        } catch (parseError) {
-          console.error('Error parsing AI response:', parseError);
-          return this.createFallbackAnalysis(metadata);
+          await this.createAISession();
+          // Retry the analysis once with new session
+          return await this.performAIAnalysis(metadata, content);
+        } catch (recreateError) {
+          console.error('Failed to recreate session:', recreateError);
         }
       }
 
       return this.createFallbackAnalysis(metadata);
-    } catch (error) {
-      console.error('Error in AI analysis:', error);
-      return this.createFallbackAnalysis(metadata);
     }
+  }
+
+  extractJSON(text) {
+    // Handle markdown code blocks that wrap JSON
+    // Common patterns: ```json\n{...}\n``` or ```\n{...}\n``` or just {...}
+
+    if (!text || text.trim().length === 0) {
+      throw new Error('Empty response from AI');
+    }
+
+    // First try to extract from markdown code blocks
+    const codeBlockMatch = text.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
+    if (codeBlockMatch) {
+      const jsonText = codeBlockMatch[1].trim();
+      if (jsonText.length > 0) {
+        try {
+          return JSON.parse(jsonText);
+        } catch (e) {
+          console.warn('Failed to parse markdown code block JSON:', e.message);
+          console.warn('Extracted text:', jsonText.substring(0, 200));
+        }
+      }
+    }
+
+    // Try to find the most complete JSON object
+    // Use greedy matching to get the longest valid JSON
+    const jsonMatches = text.matchAll(/\{[^\}]*\}/g);
+    const matches = Array.from(jsonMatches);
+
+    // Try parsing from longest to shortest match
+    for (const match of matches.sort((a, b) => b[0].length - a[0].length)) {
+      try {
+        const parsed = JSON.parse(match[0]);
+        // Validate it has expected fields
+        if (parsed.category || parsed.summary) {
+          return parsed;
+        }
+      } catch (e) {
+        // Try next match
+      }
+    }
+
+    // Try to find any JSON-like object with nested braces
+    const nestedMatch = text.match(/\{[\s\S]*\}/);
+    if (nestedMatch) {
+      try {
+        return JSON.parse(nestedMatch[0]);
+      } catch (e) {
+        console.warn('Failed to parse nested JSON:', e.message);
+        console.warn('Text preview:', nestedMatch[0].substring(0, 200));
+      }
+    }
+
+    // Last resort: try to parse the entire text as JSON
+    try {
+      return JSON.parse(text);
+    } catch (e) {
+      console.error('All JSON extraction methods failed');
+      console.error('Response length:', text.length);
+      console.error('Response preview:', text.substring(0, 300));
+      throw new Error(`Unable to extract valid JSON from AI response: ${e.message}`);
+    }
+  }
+
+  async getExistingGroupInfo() {
+    try {
+      const groups = await chrome.tabGroups.query({});
+      const groupInfo = [];
+
+      for (const group of groups) {
+        // Get tabs in this group
+        const groupTabs = await chrome.tabs.query({ groupId: group.id });
+
+        if (groupTabs.length > 0) {
+          groupInfo.push({
+            id: group.id,
+            title: group.title || 'Untitled Group',
+            color: group.color,
+            tabCount: groupTabs.length,
+            tabs: groupTabs.map(t => ({
+              id: t.id,
+              title: t.title,
+              url: t.url,
+              domain: this.extractDomain(t.url)
+            }))
+          });
+        }
+      }
+
+      return groupInfo;
+    } catch (error) {
+      console.error('Error getting existing groups:', error);
+      return [];
+    }
+  }
+
+  async suggestAddToExistingGroups(analyses, existingGroups) {
+    const suggestions = [];
+
+    if (existingGroups.length === 0) {
+      return suggestions;
+    }
+
+    // For each ungrouped tab analysis
+    for (const analysis of analyses) {
+      // Find best matching existing group
+      let bestMatch = null;
+      let bestScore = 0;
+
+      for (const group of existingGroups) {
+        const score = this.calculateGroupMatchScore(analysis, group);
+
+        if (score > bestScore && score > 0.6) { // 60% confidence threshold
+          bestScore = score;
+          bestMatch = group;
+        }
+      }
+
+      if (bestMatch) {
+        console.log(`  ➕ "${analysis.title}" → "${bestMatch.title}" (${Math.round(bestScore * 100)}% match)`);
+
+        // Create suggestion to add to existing group
+        suggestions.push({
+          groupName: `Add to "${bestMatch.title}"`,
+          existingGroupId: bestMatch.id,
+          isAddToExisting: true,
+          color: bestMatch.color,
+          tabs: [analysis],
+          confidence: bestScore
+        });
+      }
+    }
+
+    return suggestions;
+  }
+
+  calculateGroupMatchScore(analysis, group) {
+    let score = 0;
+    let factors = 0;
+
+    // Compare category with group title
+    const category = (analysis.category || '').toLowerCase();
+    const groupTitle = (group.title || '').toLowerCase();
+
+    if (category && groupTitle) {
+      // Exact match
+      if (groupTitle.includes(category) || category.includes(groupTitle)) {
+        score += 0.8;
+        factors++;
+      } else {
+        // Partial word match
+        const categoryWords = category.split(/\s+/);
+        const titleWords = groupTitle.split(/\s+/);
+        const matches = categoryWords.filter(w => titleWords.includes(w)).length;
+        if (matches > 0) {
+          score += 0.5 * (matches / Math.max(categoryWords.length, titleWords.length));
+          factors++;
+        }
+      }
+    }
+
+    // Compare domain with existing tabs in group
+    const analysisDomain = analysis.domain || '';
+    if (analysisDomain) {
+      const domainMatch = group.tabs.some(tab => tab.domain === analysisDomain);
+      if (domainMatch) {
+        score += 0.7;
+        factors++;
+      }
+    }
+
+    // Compare keywords with group tab titles
+    if (analysis.keywords && analysis.keywords.length > 0) {
+      const groupText = group.tabs.map(t => t.title.toLowerCase()).join(' ');
+      const keywordMatches = analysis.keywords.filter(kw =>
+        groupText.includes(kw.toLowerCase())
+      ).length;
+
+      if (keywordMatches > 0) {
+        score += 0.4 * (keywordMatches / analysis.keywords.length);
+        factors++;
+      }
+    }
+
+    return factors > 0 ? score / factors : 0;
   }
 
   createFallbackAnalysis(metadata) {
@@ -524,6 +1058,12 @@ Based on this information, provide a JSON response with:
         await this.createAISession();
       }
 
+      console.log('📊 Suggesting groups from', analyses.length, 'analyses');
+
+      // Get existing tab groups to check for matches
+      const existingGroups = await this.getExistingGroupInfo();
+      console.log('📁 Found', existingGroups.length, 'existing groups:', existingGroups.map(g => g.title).join(', '));
+
       // First, group by exact category match
       const exactGroups = {};
       analyses.forEach(analysis => {
@@ -532,28 +1072,46 @@ Based on this information, provide a JSON response with:
           exactGroups[category] = [];
         }
         exactGroups[category].push(analysis);
+        console.log('  -', analysis.title, '→', category);
       });
 
+      console.log('📋 Category groups:', Object.entries(exactGroups).map(([cat, tabs]) => `${cat} (${tabs.length})`).join(', '));
+
       const suggestions = [];
-      
+
+      // Check for tabs that could be added to existing groups
+      const addToGroupSuggestions = await this.suggestAddToExistingGroups(analyses, existingGroups);
+      if (addToGroupSuggestions.length > 0) {
+        console.log('➕ Found', addToGroupSuggestions.length, 'tabs to add to existing groups');
+        suggestions.push(...addToGroupSuggestions);
+      }
+
       // Process each exact category group
       for (const [category, tabs] of Object.entries(exactGroups)) {
+        console.log(`  Processing category "${category}" with ${tabs.length} tabs`);
         if (tabs.length >= 2) {
           // For larger groups, try to create subcategories based on domains or keywords
           if (tabs.length >= 4) {
             const subGroups = this.createSubGroups(tabs, category);
+            console.log(`    Created ${subGroups.length} subgroups`);
             suggestions.push(...subGroups);
           } else {
             // Smaller groups keep the main category
-            suggestions.push({
+            const suggestion = {
               groupName: category,
               color: this.getCategoryColor(category),
               tabs: tabs,
               confidence: tabs.reduce((sum, tab) => sum + (tab.confidence || 0), 0) / tabs.length
-            });
+            };
+            console.log(`    Created suggestion: "${category}" with ${tabs.length} tabs`);
+            suggestions.push(suggestion);
           }
+        } else {
+          console.log(`    Skipped (only ${tabs.length} tab, need 2+)`);
         }
       }
+
+      console.log(`✅ Generated ${suggestions.length} total suggestions`);
 
       // Sort by confidence and tab count
       suggestions.sort((a, b) => {
@@ -562,10 +1120,17 @@ Based on this information, provide a JSON response with:
         return scoreB - scoreA;
       });
 
-      return suggestions;
+      // Return both suggestions and existing groups info for debugging
+      return {
+        suggestions: suggestions,
+        existingGroups: existingGroups.map(g => ({
+          title: g.title,
+          tabCount: g.tabCount
+        }))
+      };
     } catch (error) {
       console.error('Error suggesting groups:', error);
-      return [];
+      return { suggestions: [], existingGroups: [] };
     }
   }
 
@@ -721,42 +1286,86 @@ Based on this information, provide a JSON response with:
     try {
       console.log('Creating groups:', groupSuggestions);
       const results = [];
-      
+
       for (const suggestion of groupSuggestions) {
         try {
           console.log('Processing suggestion:', suggestion);
           console.log('Tabs in suggestion:', suggestion.tabs);
-          
-          // Extract tab IDs
-          const tabIds = suggestion.tabs.map(tab => {
-            console.log('Processing tab:', tab, 'tabId:', tab.tabId);
-            return tab.tabId;
-          });
-          
-          console.log('Creating group with tab IDs:', tabIds);
-          
-          // Create the tab group
-          const group = await chrome.tabs.group({
-            tabIds: tabIds
-          });
 
-          console.log('Created group ID:', group);
+          // Extract tab IDs and verify they still exist
+          const tabIds = [];
+          for (const tab of suggestion.tabs) {
+            try {
+              // Verify tab still exists
+              const currentTab = await chrome.tabs.get(tab.tabId);
 
-          // Update group properties
-          await chrome.tabGroups.update(group, {
-            title: suggestion.groupName,
-            color: suggestion.color,
-            collapsed: false
-          });
+              // Only include tabs that are currently ungrouped
+              // to avoid accidentally removing tabs from existing groups
+              if (currentTab.groupId === -1) {
+                tabIds.push(tab.tabId);
+              } else {
+                console.log(`⚠️ Skipping tab ${tab.tabId} - already in group ${currentTab.groupId}`);
+              }
+            } catch (error) {
+              console.warn(`Tab ${tab.tabId} no longer exists, skipping`);
+            }
+          }
 
-          results.push({
-            groupId: group,
-            name: suggestion.groupName,
-            tabCount: suggestion.tabs.length,
-            success: true
-          });
+          if (tabIds.length === 0) {
+            console.log(`⚠️ No ungrouped tabs available for group "${suggestion.groupName}"`);
+            results.push({
+              name: suggestion.groupName,
+              error: 'No ungrouped tabs available',
+              success: false
+            });
+            continue;
+          }
 
-          console.log(`Created group "${suggestion.groupName}" with ${suggestion.tabs.length} tabs`);
+          console.log('Creating/updating group with tab IDs:', tabIds);
+
+          // Check if this is adding to an existing group
+          if (suggestion.isAddToExisting && suggestion.existingGroupId) {
+            // Add tabs to existing group
+            const group = await chrome.tabs.group({
+              groupId: suggestion.existingGroupId,
+              tabIds: tabIds
+            });
+
+            console.log('Added to existing group ID:', group);
+
+            results.push({
+              groupId: group,
+              name: suggestion.groupName,
+              tabCount: tabIds.length,
+              success: true,
+              addedToExisting: true
+            });
+
+            console.log(`✅ Added ${tabIds.length} tab(s) to existing group "${suggestion.groupName}"`);
+          } else {
+            // Create new tab group
+            const group = await chrome.tabs.group({
+              tabIds: tabIds
+            });
+
+            console.log('Created group ID:', group);
+
+            // Update group properties
+            await chrome.tabGroups.update(group, {
+              title: suggestion.groupName,
+              color: suggestion.color,
+              collapsed: false
+            });
+
+            results.push({
+              groupId: group,
+              name: suggestion.groupName,
+              tabCount: tabIds.length,
+              success: true
+            });
+
+            console.log(`✅ Created group "${suggestion.groupName}" with ${tabIds.length} tabs`);
+          }
         } catch (error) {
           console.error(`Error creating group "${suggestion.groupName}":`, error);
           results.push({
@@ -804,6 +1413,46 @@ Based on this information, provide a JSON response with:
       return duplicates;
     } catch (error) {
       console.error('Error finding duplicates:', error);
+      return { error: error.message };
+    }
+  }
+
+  async generateGroupName(tabs) {
+    try {
+      console.log('Generating name for group with', tabs.length, 'tabs');
+
+      if (!tabs || tabs.length === 0) {
+        return { error: 'No tabs provided' };
+      }
+
+      // Ensure AI session exists
+      if (!this.aiSession) {
+        await this.createAISession();
+      }
+
+      if (!this.aiSession) {
+        return { error: 'AI session not available' };
+      }
+
+      // Create prompt for AI
+      const tabInfo = tabs.map(t => `- ${t.title} (${t.url})`).join('\n');
+
+      const prompt = `Based on these ${tabs.length} browser tabs, suggest a short, descriptive group name (2-4 words max):
+
+${tabInfo}
+
+Provide only the group name, nothing else. Examples of good names: "Social Media", "Work Docs", "Shopping", "Dev Tools", "News & Articles"`;
+
+      console.log('Sending prompt to AI for group name generation...');
+
+      const response = await this.aiSession.prompt(prompt);
+      const groupName = response.trim();
+
+      console.log('✓ Generated group name:', groupName);
+
+      return { groupName };
+    } catch (error) {
+      console.error('Error generating group name:', error);
       return { error: error.message };
     }
   }

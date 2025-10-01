@@ -71,6 +71,32 @@ header {
     animation: none;
 }
 
+/* Status-specific colors */
+.status-dot.status-downloading {
+    background: #f59e0b;
+    animation: pulse 2s infinite;
+}
+
+.status-dot.status-download-required {
+    background: #f59e0b;
+}
+
+.status-dot.status-flags-disabled {
+    background: #dc2626;
+}
+
+.status-dot.status-gpu-unavailable {
+    background: #dc2626;
+}
+
+.status-dot.status-storage-full {
+    background: #dc2626;
+}
+
+.status-dot.status-unsupported-browser {
+    background: #dc2626;
+}
+
 @keyframes pulse {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.5; }

@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Better Tabs AI",
   "description": "AI-powered tab organization and grouping with automatic summarization",
-  "version": "1.2.0",
+  "version": "1.5.2",
   "action": {
     "default_popup": "popup/popup.html",
     "default_title": "Better Tabs AI",
@@ -42,7 +42,7 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["utils/*.js"],
+      "resources": ["utils/*.js", "full-interface/*"],
       "matches": ["<all_urls>"]
     }
   ]

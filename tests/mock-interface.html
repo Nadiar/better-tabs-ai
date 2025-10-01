@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Better Tabs AI - Mock Interface for Testing</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --primary-color: #667eea;
+            --success-color: #10b981;
+            --bg-secondary: #f8fafc;
+            --text-primary: #1e293b;
+            --text-secondary: #64748b;
+            --border-color: #e2e8f0;
+            --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+        }
+
+        .app-container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        .main-header {
+            background: var(--primary-gradient);
+            color: white;
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: var(--shadow-md);
+        }
+
+        .header-left h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+
+        button {
+            border: none;
+            border-radius: 8px;
+            padding: 0.625rem 1.25rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .btn-primary {
+            background: white;
+            color: var(--primary-color);
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+        }
+
+        .main-content {
+            flex: 1;
+            padding: 1.5rem;
+            overflow: hidden;
+        }
+
+        .three-column-grid {
+            display: grid;
+            grid-template-columns: 1fr 2fr 1fr;
+            gap: 1.5rem;
+            height: 100%;
+        }
+
+        .column {
+            background: white;
+            border-radius: 12px;
+            box-shadow: var(--shadow-md);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .column-header {
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+            background: var(--bg-secondary);
+            font-weight: 600;
+        }
+
+        .column-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .tab-card {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.75rem;
+            background: white;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            cursor: grab;
+            transition: all 0.2s ease;
+            min-height: 60px;
+        }
+
+        .tab-card:hover {
+            border-color: var(--primary-color);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+            transform: translateY(-1px);
+        }
+
+        .tab-card.dragging {
+            opacity: 0.3;
+            cursor: grabbing;
+        }
+
+        .tab-favicon {
+            width: 16px;
+            height: 16px;
+            flex-shrink: 0;
+        }
+
+        .tab-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .tab-title {
+            font-size: 0.875rem;
+            font-weight: 500;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .tab-domain {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .group-container {
+            border: 1px solid var(--border-color);
+            border-left-width: 4px;
+            border-radius: 8px;
+            background: white;
+            margin-bottom: 1rem;
+        }
+
+        .group-header {
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .group-title {
+            font-size: 0.875rem;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .group-tabs {
+            padding: 0.75rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .new-group-box {
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.1), rgba(118, 75, 162, 0.1));
+            border: 2px dashed var(--primary-color);
+            border-radius: 12px;
+            padding: 2rem;
+            text-align: center;
+            min-height: 300px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .new-group-box:hover {
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.15), rgba(118, 75, 162, 0.15));
+        }
+
+        .new-group-box.drag-over {
+            border-color: var(--success-color);
+            background: rgba(16, 185, 129, 0.05);
+            transform: scale(1.02);
+        }
+
+        .drag-over {
+            border-color: var(--success-color) !important;
+            background: rgba(16, 185, 129, 0.05);
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <header class="main-header">
+            <div class="header-left">
+                <h1>Better Tabs AI - Mock Interface</h1>
+            </div>
+            <div class="header-right">
+                <button class="btn-secondary">Cancel</button>
+                <button class="btn-primary">Apply Changes</button>
+            </div>
+        </header>
+
+        <main class="main-content">
+            <div class="three-column-grid">
+                <!-- Ungrouped Column -->
+                <div class="column ungrouped-column">
+                    <div class="column-header">Ungrouped Tabs (6)</div>
+                    <div class="column-content" id="ungrouped-content">
+                        <div class="tab-card" draggable="true" data-tab-id="1">
+                            <div class="tab-favicon">🌐</div>
+                            <div class="tab-info">
+                                <div class="tab-title">Google Search</div>
+                                <div class="tab-domain">google.com</div>
+                            </div>
+                        </div>
+                        <div class="tab-card" draggable="true" data-tab-id="2">
+                            <div class="tab-favicon">📘</div>
+                            <div class="tab-info">
+                                <div class="tab-title">Facebook</div>
+                                <div class="tab-domain">facebook.com</div>
+                            </div>
+                        </div>
+                        <div class="tab-card" draggable="true" data-tab-id="3">
+                            <div class="tab-favicon">🐦</div>
+                            <div class="tab-info">
+                                <div class="tab-title">Twitter / X</div>
+                                <div class="tab-domain">twitter.com</div>
+                            </div>
+                        </div>
+                        <div class="tab-card" draggable="true" data-tab-id="4">
+                            <div class="tab-favicon">📰</div>
+                            <div class="tab-info">
+                                <div class="tab-title">Reddit</div>
+                                <div class="tab-domain">reddit.com</div>
+                            </div>
+                        </div>
+                        <div class="tab-card" draggable="true" data-tab-id="5">
+                            <div class="tab-favicon">📺</div>
+                            <div class="tab-info">
+                                <div class="tab-title">YouTube</div>
+                                <div class="tab-domain">youtube.com</div>
+                            </div>
+                        </div>
+                        <div class="tab-card" draggable="true" data-tab-id="6">
+                            <div class="tab-favicon">🎵</div>
+                            <div class="tab-info">
+                                <div class="tab-title">Spotify</div>
+                                <div class="tab-domain">spotify.com</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Groups Column -->
+                <div class="column groups-column">
+                    <div class="column-header">Tab Groups</div>
+                    <div class="column-content" id="groups-content">
+                        <div class="group-container" data-group-id="1" style="border-left-color: #1a73e8;">
+                            <div class="group-header" style="background: rgba(26, 115, 232, 0.1);">
+                                <span class="group-title">Work Projects</span>
+                                <span class="tab-count">3</span>
+                            </div>
+                            <div class="group-tabs">
+                                <div class="tab-card" draggable="true" data-tab-id="101">
+                                    <div class="tab-favicon">💼</div>
+                                    <div class="tab-info">
+                                        <div class="tab-title">Project Dashboard</div>
+                                        <div class="tab-domain">atlassian.com</div>
+                                    </div>
+                                </div>
+                                <div class="tab-card" draggable="true" data-tab-id="102">
+                                    <div class="tab-favicon">📊</div>
+                                    <div class="tab-info">
+                                        <div class="tab-title">Analytics Report</div>
+                                        <div class="tab-domain">analytics.google.com</div>
+                                    </div>
+                                </div>
+                                <div class="tab-card" draggable="true" data-tab-id="103">
+                                    <div class="tab-favicon">📧</div>
+                                    <div class="tab-info">
+                                        <div class="tab-title">Gmail</div>
+                                        <div class="tab-domain">mail.google.com</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="group-container" data-group-id="2" style="border-left-color: #1e8e3e;">
+                            <div class="group-header" style="background: rgba(30, 142, 62, 0.1);">
+                                <span class="group-title">Learning</span>
+                                <span class="tab-count">2</span>
+                            </div>
+                            <div class="group-tabs">
+                                <div class="tab-card" draggable="true" data-tab-id="201">
+                                    <div class="tab-favicon">🎓</div>
+                                    <div class="tab-info">
+                                        <div class="tab-title">Coursera Course</div>
+                                        <div class="tab-domain">coursera.org</div>
+                                    </div>
+                                </div>
+                                <div class="tab-card" draggable="true" data-tab-id="202">
+                                    <div class="tab-favicon">📖</div>
+                                    <div class="tab-info">
+                                        <div class="tab-title">MDN Docs</div>
+                                        <div class="tab-domain">developer.mozilla.org</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- New Group Box -->
+                <div class="column">
+                    <div class="new-group-box" id="new-group-box">
+                        <div style="font-size: 3rem; margin-bottom: 1rem;">📁</div>
+                        <h3>New Group</h3>
+                        <p style="font-size: 0.875rem; color: var(--text-secondary); margin-top: 0.5rem;">Drag tabs here to create a new group</p>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // Simple drag & drop implementation for testing
+        let draggedElement = null;
+
+        document.querySelectorAll('.tab-card').forEach(card => {
+            card.addEventListener('dragstart', function(e) {
+                draggedElement = this;
+                this.classList.add('dragging');
+                e.dataTransfer.effectAllowed = 'move';
+            });
+
+            card.addEventListener('dragend', function() {
+                this.classList.remove('dragging');
+                draggedElement = null;
+                // Remove all drag-over classes
+                document.querySelectorAll('.drag-over').forEach(el => {
+                    el.classList.remove('drag-over');
+                });
+            });
+        });
+
+        // Make drop zones
+        ['.group-container', '.new-group-box', '.ungrouped-column'].forEach(selector => {
+            document.querySelectorAll(selector).forEach(zone => {
+                zone.addEventListener('dragover', function(e) {
+                    e.preventDefault();
+                    this.classList.add('drag-over');
+                });
+
+                zone.addEventListener('dragleave', function() {
+                    this.classList.remove('drag-over');
+                });
+
+                zone.addEventListener('drop', function(e) {
+                    e.preventDefault();
+                    this.classList.remove('drag-over');
+
+                    if (draggedElement && this !== draggedElement.parentElement) {
+                        // Move the element
+                        if (this.classList.contains('new-group-box')) {
+                            console.log('Creating new group with tab:', draggedElement.dataset.tabId);
+                        } else if (this.classList.contains('group-container')) {
+                            const groupTabs = this.querySelector('.group-tabs');
+                            groupTabs.appendChild(draggedElement);
+                            console.log('Moved tab to group:', this.dataset.groupId);
+                        } else if (this.classList.contains('ungrouped-column')) {
+                            const content = this.querySelector('.column-content');
+                            content.appendChild(draggedElement);
+                            console.log('Moved tab to ungrouped');
+                        }
+                    }
+                });
+            });
+        });
+
+        // Make group-tabs sortable within groups
+        document.querySelectorAll('.group-tabs').forEach(groupTabs => {
+            groupTabs.addEventListener('dragover', function(e) {
+                e.preventDefault();
+                const afterElement = getDragAfterElement(this, e.clientY);
+                if (draggedElement && draggedElement.classList.contains('tab-card')) {
+                    if (afterElement == null) {
+                        this.appendChild(draggedElement);
+                    } else {
+                        this.insertBefore(draggedElement, afterElement);
+                    }
+                }
+            });
+        });
+
+        function getDragAfterElement(container, y) {
+            const draggableElements = [...container.querySelectorAll('.tab-card:not(.dragging)')];
+
+            return draggableElements.reduce((closest, child) => {
+                const box = child.getBoundingClientRect();
+                const offset = y - box.top - box.height / 2;
+
+                if (offset < 0 && offset > closest.offset) {
+                    return { offset: offset, element: child };
+                } else {
+                    return closest;
+                }
+            }, { offset: Number.NEGATIVE_INFINITY }).element;
+        }
+
+        // Editable group titles
+        document.querySelectorAll('.group-title').forEach(title => {
+            title.addEventListener('click', function() {
+                const currentText = this.textContent;
+                const input = document.createElement('input');
+                input.value = currentText;
+                input.style.cssText = 'font-size: 0.875rem; font-weight: 600; border: 2px solid #667eea; border-radius: 4px; padding: 0.25rem 0.5rem;';
+
+                this.replaceWith(input);
+                input.focus();
+                input.select();
+
+                input.addEventListener('blur', function() {
+                    const newTitle = document.createElement('span');
+                    newTitle.className = 'group-title';
+                    newTitle.textContent = this.value || currentText;
+                    this.replaceWith(newTitle);
+
+                    // Re-add click listener
+                    newTitle.addEventListener('click', arguments.callee);
+                });
+
+                input.addEventListener('keydown', function(e) {
+                    if (e.key === 'Enter') {
+                        this.blur();
+                    } else if (e.key === 'Escape') {
+                        this.value = currentText;
+                        this.blur();
+                    }
+                });
+            });
+        });
+
+        console.log('Mock interface ready for testing');
+    </script>
+</body>
+</html>
