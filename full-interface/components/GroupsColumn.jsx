@@ -5,7 +5,7 @@ import { useStagedStateContext } from '../app';
 
 
 // Groups Column - Center column showing existing groups and AI suggestions
-function GroupsColumn({ groups, tabs, suggestions }) {
+function GroupsColumn({ groups, tabs, suggestions, duplicateTabs = [] }) {
   const { updateStaged } = useStagedStateContext();
 
   // Mix suggestions with existing groups (suggestions displayed first)
@@ -99,6 +99,7 @@ function GroupsColumn({ groups, tabs, suggestions }) {
                   key={item.key}
                   group={item.data}
                   tabs={tabs}
+                  duplicateTabs={duplicateTabs}
                 />
               );
             }

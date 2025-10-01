@@ -44,7 +44,13 @@
   - Auto-remove suggestions when created or dismissed
   - Custom event system for suggestion management
 
-- 🔜 **Phase 6: Search, Filter & Duplicates** - Pending
+- ✅ **Phase 6: Search & Duplicates** - Core Features Complete
+  - Search bar in header with debounced input (300ms)
+  - Real-time search filtering (title and URL)
+  - Clear search button
+  - Automatic duplicate tab detection
+  - Duplicate badge display on matching tabs
+  - Note: Filter checkboxes deferred to future phase
 - 🔜 **Phase 7: Undo/Redo & Polish** - Pending
 - 🔜 **Phase 8: Performance & Optimization** - Pending
 - 🔜 **Phase 9: Testing & Deployment** - Pending

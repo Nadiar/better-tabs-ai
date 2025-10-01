@@ -41,6 +41,8 @@ function App() {
   const [toasts, setToasts] = useState([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [suggestions, setSuggestions] = useState(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [duplicateTabs, setDuplicateTabs] = useState([]);
 
   // Use ref to track hasChanges for event listeners (avoid stale closure)
   const hasChangesRef = React.useRef(false);
@@ -408,6 +410,31 @@ function App() {
     }, 120000);
   };
 
+  // Detect duplicate tabs
+  useEffect(() => {
+    const urlMap = new Map();
+    const duplicates = [];
+
+    stagedState.tabs.forEach(tab => {
+      const url = tab.url;
+      if (urlMap.has(url)) {
+        // Both the original and this tab are duplicates
+        if (!duplicates.includes(urlMap.get(url))) {
+          duplicates.push(urlMap.get(url));
+        }
+        duplicates.push(tab.id);
+      } else {
+        urlMap.set(url, tab.id);
+      }
+    });
+
+    setDuplicateTabs(duplicates);
+  }, [stagedState.tabs]);
+
+  const handleSearchChange = (term) => {
+    setSearchTerm(term);
+  };
+
   const contextValue = {
     originalState,
     stagedState,
@@ -418,12 +445,15 @@ function App() {
     applyProgress,
     toasts,
     suggestions,
+    searchTerm,
+    duplicateTabs,
     updateStaged,
     resetToOriginal,
     applyChanges,
     analyzeTabs,
     refreshFromChrome: loadChromeData,
-    dismissConflictBanner
+    dismissConflictBanner,
+    handleSearchChange
   };
 
   if (error) {

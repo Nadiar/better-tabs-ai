@@ -4,7 +4,7 @@ import TabCard from './TabCard';
 
 
 // Ungrouped Tabs Column - Droppable area for ungrouped tabs
-function UngroupedColumn({ tabs }) {
+function UngroupedColumn({ tabs, duplicateTabs }) {
   const ungroupedTabs = tabs.filter(tab => tab.groupId === -1);
 
   const { setNodeRef, isOver } = useDroppable({
@@ -28,6 +28,7 @@ function UngroupedColumn({ tabs }) {
             <TabCard
               key={tab.id}
               tab={tab}
+              isDuplicate={duplicateTabs.includes(tab.id)}
             />
           ))
         )}

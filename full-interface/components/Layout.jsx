@@ -12,8 +12,22 @@ import ToastContainer from './Toast';
 
 // Layout Component - Main 3-column layout with drag & drop
 function Layout() {
-  const { stagedState, hasChanges, showConflictBanner, isApplying, isAnalyzing, applyProgress, toasts, suggestions, resetToOriginal, applyChanges, analyzeTabs, refreshFromChrome, updateStaged, dismissConflictBanner } = useStagedStateContext();
+  const { stagedState, hasChanges, showConflictBanner, isApplying, isAnalyzing, applyProgress, toasts, suggestions, searchTerm, duplicateTabs, resetToOriginal, applyChanges, analyzeTabs, refreshFromChrome, updateStaged, dismissConflictBanner, handleSearchChange } = useStagedStateContext();
   const [activeTab, setActiveTab] = useState(null);
+
+  // Filter tabs based on search term
+  const filteredTabs = useMemo(() => {
+    if (!searchTerm.trim()) {
+      return stagedState.tabs;
+    }
+
+    const term = searchTerm.toLowerCase();
+    return stagedState.tabs.filter(tab => {
+      const titleMatch = tab.title?.toLowerCase().includes(term);
+      const urlMatch = tab.url?.toLowerCase().includes(term);
+      return titleMatch || urlMatch;
+    });
+  }, [stagedState.tabs, searchTerm]);
 
   // Setup drag sensors
   const sensors = useSensors(
@@ -160,10 +174,10 @@ function Layout() {
 
   // Memoize columns to prevent unnecessary re-renders during drag
   const memoizedColumns = useMemo(() => ({
-    ungrouped: <UngroupedColumn tabs={stagedState.tabs} />,
-    groups: <GroupsColumn groups={stagedState.groups} tabs={stagedState.tabs} suggestions={suggestions} />,
+    ungrouped: <UngroupedColumn tabs={filteredTabs} duplicateTabs={duplicateTabs} />,
+    groups: <GroupsColumn groups={stagedState.groups} tabs={filteredTabs} suggestions={suggestions} duplicateTabs={duplicateTabs} />,
     newGroup: <NewGroupBox />
-  }), [stagedState.tabs, stagedState.groups, suggestions]);
+  }), [filteredTabs, stagedState.groups, suggestions, duplicateTabs]);
 
   return (
     <DndContext
@@ -179,6 +193,7 @@ function Layout() {
           onAnalyze={handleAnalyze}
           isApplying={isApplying}
           isAnalyzing={isAnalyzing}
+          onSearchChange={handleSearchChange}
         />
 
         {showConflictBanner && (
