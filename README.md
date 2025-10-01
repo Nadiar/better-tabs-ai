@@ -30,6 +30,20 @@
 - **Toast Notifications**: Success/error feedback with detailed status messages
 - **Privacy-First**: Uses local Chrome AI - no data sent to external servers
 
+## Demo
+
+### 🎬 Drag & Drop Workflow
+
+![Drag & Drop Animation](screenshots/drag_drop_animation.gif)
+
+Drag tabs between groups with smooth visual feedback and staged changes
+
+### 🤖 AI Suggestions in Action
+
+![AI Suggestions Animation](screenshots/ai_suggestions_animation.gif)
+
+AI analyzes ungrouped tabs and suggests intelligent groupings with confidence scores
+
 ## Latest Updates (v1.5.2)
 
 ### 🚀 Full Interface Implementation (Phases 1-6 Complete)
