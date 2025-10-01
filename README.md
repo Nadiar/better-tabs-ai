@@ -52,9 +52,27 @@ Drag tabs between groups with smooth visual feedback and staged changes
 
 AI analyzes ungrouped tabs and suggests intelligent groupings with confidence scores
 
-## Latest Updates (v2.0.0)
+## Latest Updates (v2.1.0)
 
-### 🎉 Major Release: Full Drag & Drop Interface Complete (Phases 7-8)
+### 🚀 AI & Settings Enhancement Release
+
+#### **✅ AI Grouping Improvements (Phases A-C)**
+- **Pattern Detection**: Automatically detect same-domain tabs, tool ecosystems (*arr stack, Google Workspace, Destiny tools), and keyword matches
+- **Enhanced AI Prompt**: Better instructions for domain similarity, shopping relationships, and tool recognition
+- **Confidence Boosting**: +30% for same domain, +40% for known tool ecosystems, +10% for keyword matches
+- **Smart Suggestions**: Pattern-based suggestions prioritized over category matching
+- **Tool Ecosystems**: Recognizes Media Server Tools (Radarr/Sonarr), Google Workspace, Destiny Tools, Development Tools
+
+#### **✅ Settings Infrastructure (Phases D-E)**
+- **Dynamic Confidence Threshold**: Adjustable from 0.5 (aggressive) to 0.9 (conservative) - default lowered to 0.5
+- **Max Suggestions Limit**: Configurable (default: 10)
+- **Settings Persistence**: Stored in chrome.storage.sync, syncs across devices
+- **Backend Complete**: Full settings management (get/save/reset) ready for UI
+- **Message Handlers**: 'getSettings', 'saveSettings', 'resetSettings' actions available
+
+## Previous Updates (v2.0.0)
+
+### 🎉 Major Release: Full Drag & Drop Interface Complete (Phases 7-9)
 
 #### **✅ Phase 7: Undo/Redo & Polish**
 - **Undo/Redo**: Track last 5 state snapshots with keyboard shortcuts (Ctrl+Z, Ctrl+Shift+Z, Ctrl+Y)
