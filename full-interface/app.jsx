@@ -41,6 +41,7 @@ function App() {
   const [applyProgress, setApplyProgress] = useState({ current: 0, total: 0, message: '' });
   const [toasts, setToasts] = useState([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisProgress, setAnalysisProgress] = useState({ current: 0, total: 0, status: 'idle' });
   const [suggestions, setSuggestions] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [duplicateTabs, setDuplicateTabs] = useState([]);
@@ -361,18 +362,23 @@ function App() {
         forceRefresh: false
       });
 
+      console.log('📊 Analysis response:', response);
+
       if (response.error) {
         addToast(`Analysis failed: ${response.error}`, 'error');
       } else if (response.cached) {
         // Using cached results
+        console.log('✅ Using cached results, suggestions:', response.suggestions);
         setSuggestions(response.suggestions || []);
         addToast(response.message || 'Analysis complete (cached)', 'success');
       } else if (response.started) {
         // Background analysis started - poll for results
+        console.log('🔄 Analysis started, polling for results...');
         addToast('Analysis started in background...', 'info');
         pollForAnalysisResults();
       } else if (response.suggestions) {
         // Immediate results
+        console.log('✅ Immediate results, suggestions:', response.suggestions);
         setSuggestions(response.suggestions);
         addToast(`Found ${response.suggestions.length} grouping suggestions`, 'success');
       }
@@ -391,6 +397,11 @@ function App() {
           action: 'getAnalysisProgress'
         });
 
+        // Update progress
+        if (response.progress) {
+          setAnalysisProgress(response.progress);
+        }
+
         if (response.progress && response.progress.status === 'complete') {
           clearInterval(pollInterval);
 
@@ -398,19 +409,26 @@ function App() {
             action: 'getLastAnalysisResults'
           });
 
+          console.log('📋 Poll complete, resultsResponse:', resultsResponse);
+
           if (resultsResponse.results && resultsResponse.results.suggestions) {
+            console.log('✅ Setting suggestions:', resultsResponse.results.suggestions);
             setSuggestions(resultsResponse.results.suggestions);
             addToast(`Found ${resultsResponse.results.suggestions.length} grouping suggestions`, 'success');
+          } else {
+            console.warn('⚠️ No suggestions in resultsResponse:', resultsResponse);
           }
 
           setIsAnalyzing(false);
+          setAnalysisProgress({ current: 0, total: 0, status: 'idle' });
         }
       } catch (error) {
         clearInterval(pollInterval);
         console.error('Error polling for results:', error);
         setIsAnalyzing(false);
+        setAnalysisProgress({ current: 0, total: 0, status: 'idle' });
       }
-    }, 1000);
+    }, 500); // Poll more frequently for better UX
 
     // Stop polling after 2 minutes
     setTimeout(() => {
@@ -475,6 +493,7 @@ function App() {
     showConflictBanner,
     isApplying,
     isAnalyzing,
+    analysisProgress,
     applyProgress,
     toasts,
     suggestions,

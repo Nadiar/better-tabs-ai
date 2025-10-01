@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 
 // Header Component with Search, Apply/Cancel/Analyze/Undo/Redo buttons
-function Header({ hasChanges, onApply, onCancel, onAnalyze, isApplying, isAnalyzing, onSearchChange, undoRedo }) {
+function Header({ hasChanges, onApply, onCancel, onAnalyze, isApplying, isAnalyzing, analysisProgress, onSearchChange, undoRedo }) {
   const logoUrl = chrome.runtime.getURL('icons/icon32.png');
   const [searchTerm, setSearchTerm] = useState('');
   const searchTimeout = useRef(null);
@@ -79,7 +79,11 @@ function Header({ hasChanges, onApply, onCancel, onAnalyze, isApplying, isAnalyz
           disabled={isApplying || isAnalyzing}
           title="Analyze tabs and generate AI grouping suggestions"
         >
-          {isAnalyzing ? '🤖 Analyzing...' : '🤖 Analyze'}
+          {isAnalyzing && analysisProgress?.total > 0
+            ? `🤖 Analyzing ${analysisProgress.current}/${analysisProgress.total}...`
+            : isAnalyzing
+            ? '🤖 Analyzing...'
+            : '🤖 Analyze'}
         </button>
         <button
           className="btn-secondary"
