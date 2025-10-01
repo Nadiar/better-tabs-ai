@@ -5,6 +5,7 @@ import ErrorBoundary from './components/ErrorBoundary';
 import LoadingState from './components/LoadingState';
 import Layout from './components/Layout';
 import { calculateDiff, describeChanges } from './utils/diff-calculator';
+import { useUndoRedo } from './hooks/useUndoRedo';
 import "./styles/main.css";import "./styles/layout.css";import "./styles/drag-drop.css";import "./styles/animations.css";
 
 // Staged State Context - Provides staged state to all components
@@ -43,6 +44,9 @@ function App() {
   const [suggestions, setSuggestions] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [duplicateTabs, setDuplicateTabs] = useState([]);
+
+  // Undo/Redo functionality
+  const undoRedo = useUndoRedo(stagedState, setStagedState);
 
   // Use ref to track hasChanges for event listeners (avoid stale closure)
   const hasChangesRef = React.useRef(false);
@@ -144,6 +148,9 @@ function App() {
   };
 
   const updateStaged = (updaterFn) => {
+    // Push current state to history before making changes
+    undoRedo.pushHistory();
+
     setStagedState(prev => {
       // If updaterFn is a function, call it with a mutable draft
       if (typeof updaterFn === 'function') {
@@ -162,6 +169,7 @@ function App() {
   const resetToOriginal = () => {
     setStagedState(JSON.parse(JSON.stringify(originalState)));
     setHasChanges(false);
+    undoRedo.clearHistory(); // Clear undo/redo history on cancel
   };
 
   const addToast = (message, type = 'info') => {
@@ -327,6 +335,7 @@ function App() {
       // Reload from Chrome
       setApplyProgress({ current: totalOps, total: totalOps, message: 'Reloading...' });
       await loadChromeData();
+      undoRedo.clearHistory(); // Clear undo/redo history after successful apply
     } catch (error) {
       console.error('Failed to apply changes:', error);
       addToast(`Failed to apply changes: ${error.message}`, 'error');
@@ -435,6 +444,30 @@ function App() {
     setSearchTerm(term);
   };
 
+  // Keyboard shortcuts for undo/redo
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Ctrl+Z or Cmd+Z for undo
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        undoRedo.undo();
+      }
+      // Ctrl+Shift+Z or Cmd+Shift+Z for redo
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && e.shiftKey) {
+        e.preventDefault();
+        undoRedo.redo();
+      }
+      // Ctrl+Y or Cmd+Y for redo (alternative)
+      if ((e.ctrlKey || e.metaKey) && e.key === 'y') {
+        e.preventDefault();
+        undoRedo.redo();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [undoRedo]);
+
   const contextValue = {
     originalState,
     stagedState,
@@ -447,6 +480,7 @@ function App() {
     suggestions,
     searchTerm,
     duplicateTabs,
+    undoRedo,
     updateStaged,
     resetToOriginal,
     applyChanges,

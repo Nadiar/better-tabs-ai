@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useDraggable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
+import Tooltip from './Tooltip';
 
 // Tab Card Component - Draggable tab with favicon and title
 function TabCard({ tab, isSelected, isDuplicate, onSelect }) {
@@ -37,33 +38,34 @@ function TabCard({ tab, isSelected, isDuplicate, onSelect }) {
   };
 
   return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      {...listeners}
-      {...attributes}
-      className={`tab-card ${isSelected ? 'selected' : ''} ${isDuplicate ? 'duplicate' : ''} ${isDragging ? 'dragging' : ''}`}
-      onClick={(e) => onSelect && onSelect(tab.id, e)}
-      title={`${tab.title}\n${tab.url}`}
-    >
-      <img
-        src={getFaviconUrl(tab)}
-        alt=""
-        className={`tab-favicon ${!faviconLoaded && !faviconError ? 'loading' : ''}`}
-        onLoad={() => setFaviconLoaded(true)}
-        onError={(e) => {
-          setFaviconError(true);
-          e.target.src = chrome.runtime.getURL('icons/icon16.png');
-        }}
-      />
-      <div className="tab-info">
-        <div className="tab-title">{truncate(tab.title, 40)}</div>
-        <div className="tab-domain">{getDomain(tab.url)}</div>
+    <Tooltip tab={tab}>
+      <div
+        ref={setNodeRef}
+        style={style}
+        {...listeners}
+        {...attributes}
+        className={`tab-card ${isSelected ? 'selected' : ''} ${isDuplicate ? 'duplicate' : ''} ${isDragging ? 'dragging' : ''}`}
+        onClick={(e) => onSelect && onSelect(tab.id, e)}
+      >
+        <img
+          src={getFaviconUrl(tab)}
+          alt=""
+          className={`tab-favicon ${!faviconLoaded && !faviconError ? 'loading' : ''}`}
+          onLoad={() => setFaviconLoaded(true)}
+          onError={(e) => {
+            setFaviconError(true);
+            e.target.src = chrome.runtime.getURL('icons/icon16.png');
+          }}
+        />
+        <div className="tab-info">
+          <div className="tab-title">{truncate(tab.title, 40)}</div>
+          <div className="tab-domain">{getDomain(tab.url)}</div>
+        </div>
+        {isDuplicate && (
+          <span className="duplicate-badge">Duplicate</span>
+        )}
       </div>
-      {isDuplicate && (
-        <span className="duplicate-badge">Duplicate</span>
-      )}
-    </div>
+    </Tooltip>
   );
 }
 

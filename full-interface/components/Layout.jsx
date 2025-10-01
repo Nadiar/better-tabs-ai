@@ -8,11 +8,12 @@ import GroupsColumn from './GroupsColumn';
 import NewGroupBox from './NewGroupBox';
 import TabCard from './TabCard';
 import ToastContainer from './Toast';
+import ProgressBar from './ProgressBar';
 
 
 // Layout Component - Main 3-column layout with drag & drop
 function Layout() {
-  const { stagedState, hasChanges, showConflictBanner, isApplying, isAnalyzing, applyProgress, toasts, suggestions, searchTerm, duplicateTabs, resetToOriginal, applyChanges, analyzeTabs, refreshFromChrome, updateStaged, dismissConflictBanner, handleSearchChange } = useStagedStateContext();
+  const { stagedState, hasChanges, showConflictBanner, isApplying, isAnalyzing, applyProgress, toasts, suggestions, searchTerm, duplicateTabs, undoRedo, resetToOriginal, applyChanges, analyzeTabs, refreshFromChrome, updateStaged, dismissConflictBanner, handleSearchChange } = useStagedStateContext();
   const [activeTab, setActiveTab] = useState(null);
 
   // Filter tabs based on search term
@@ -194,6 +195,7 @@ function Layout() {
           isApplying={isApplying}
           isAnalyzing={isAnalyzing}
           onSearchChange={handleSearchChange}
+          undoRedo={undoRedo}
         />
 
         {showConflictBanner && (
@@ -234,9 +236,11 @@ function Layout() {
           </span>
         )}
         {isApplying && applyProgress.total > 0 && (
-          <span className="progress-indicator">
-            Applying {applyProgress.current}/{applyProgress.total}: {applyProgress.message}
-          </span>
+          <ProgressBar
+            current={applyProgress.current}
+            total={applyProgress.total}
+            message={applyProgress.message}
+          />
         )}
       </footer>
 

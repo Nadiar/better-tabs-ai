@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 
-// Header Component with Search, Apply/Cancel/Analyze buttons
-function Header({ hasChanges, onApply, onCancel, onAnalyze, isApplying, isAnalyzing, onSearchChange }) {
+// Header Component with Search, Apply/Cancel/Analyze/Undo/Redo buttons
+function Header({ hasChanges, onApply, onCancel, onAnalyze, isApplying, isAnalyzing, onSearchChange, undoRedo }) {
   const logoUrl = chrome.runtime.getURL('icons/icon32.png');
   const [searchTerm, setSearchTerm] = useState('');
   const searchTimeout = useRef(null);
@@ -57,6 +57,22 @@ function Header({ hasChanges, onApply, onCancel, onAnalyze, isApplying, isAnalyz
       </div>
 
       <div className="header-right">
+        <button
+          className="btn-icon"
+          onClick={undoRedo?.undo}
+          disabled={!undoRedo?.canUndo || isApplying}
+          title={undoRedo?.undoDescription || 'Undo (Ctrl+Z)'}
+        >
+          ↶
+        </button>
+        <button
+          className="btn-icon"
+          onClick={undoRedo?.redo}
+          disabled={!undoRedo?.canRedo || isApplying}
+          title={undoRedo?.redoDescription || 'Redo (Ctrl+Shift+Z)'}
+        >
+          ↷
+        </button>
         <button
           className="btn-secondary"
           onClick={onAnalyze}
