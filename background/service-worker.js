@@ -175,6 +175,146 @@ const AIStatusMessages = {
   }
 };
 
+// Pattern Detector - Inline version for service worker
+// Detects relationships between tabs before AI analysis
+const PatternDetector = {
+  detectPatterns(tabs) {
+    return {
+      domainGroups: this.groupBySameDomain(tabs),
+      subdomainGroups: this.groupBySameSubdomain(tabs),
+      toolEcosystems: this.detectToolEcosystems(tabs),
+      keywordMatches: this.detectKeywordMatches(tabs)
+    };
+  },
+
+  groupBySameDomain(tabs) {
+    const groups = {};
+    tabs.forEach(tab => {
+      const domain = this.extractDomain(tab.url);
+      if (!groups[domain]) groups[domain] = [];
+      groups[domain].push(tab);
+    });
+    return Object.entries(groups)
+      .filter(([_, tabList]) => tabList.length >= 2)
+      .map(([domain, tabList]) => ({ type: 'same-domain', domain, tabs: tabList, confidence: 0.9 }));
+  },
+
+  groupBySameSubdomain(tabs) {
+    const groups = {};
+    tabs.forEach(tab => {
+      const subdomain = this.extractSubdomain(tab.url);
+      if (subdomain) {
+        if (!groups[subdomain]) groups[subdomain] = [];
+        groups[subdomain].push(tab);
+      }
+    });
+    return Object.entries(groups)
+      .filter(([_, tabList]) => tabList.length >= 2)
+      .map(([subdomain, tabList]) => ({ type: 'same-subdomain', subdomain, tabs: tabList, confidence: 0.7 }));
+  },
+
+  detectToolEcosystems(tabs) {
+    const ecosystems = {
+      'arr-stack': {
+        keywords: ['radarr', 'sonarr', 'lidarr', 'prowlarr', 'autobrr', 'bazarr'],
+        name: 'Media Server Tools',
+        confidence: 0.95
+      },
+      'google-workspace': {
+        keywords: ['docs.google', 'drive.google', 'mail.google', 'calendar.google', 'sheets.google'],
+        name: 'Google Workspace',
+        confidence: 0.95
+      },
+      'destiny-tools': {
+        keywords: ['destinyitemmanager', 'braytech', 'light.gg', 'd2gunsmith'],
+        name: 'Destiny Tools',
+        confidence: 0.9
+      },
+      'development': {
+        keywords: ['github', 'gitlab', 'stackoverflow', 'code.visualstudio'],
+        name: 'Development Tools',
+        confidence: 0.85
+      }
+    };
+
+    const detected = [];
+    for (const [ecosystemId, ecosystem] of Object.entries(ecosystems)) {
+      const matchingTabs = tabs.filter(tab => {
+        const url = tab.url.toLowerCase();
+        const title = tab.title.toLowerCase();
+        return ecosystem.keywords.some(keyword => url.includes(keyword) || title.includes(keyword));
+      });
+      if (matchingTabs.length >= 2) {
+        detected.push({
+          type: 'tool-ecosystem',
+          ecosystem: ecosystemId,
+          name: ecosystem.name,
+          tabs: matchingTabs,
+          confidence: ecosystem.confidence
+        });
+      }
+    }
+    return detected;
+  },
+
+  detectKeywordMatches(tabs) {
+    // Find tabs with overlapping keywords in title
+    const keywordGroups = new Map();
+    tabs.forEach(tab => {
+      const keywords = this.extractKeywords(tab.title);
+      keywords.forEach(keyword => {
+        if (!keywordGroups.has(keyword)) keywordGroups.set(keyword, []);
+        keywordGroups.get(keyword).push(tab);
+      });
+    });
+
+    return Array.from(keywordGroups.entries())
+      .filter(([_, tabList]) => tabList.length >= 2)
+      .map(([keyword, tabList]) => ({ type: 'keyword-match', keyword, tabs: tabList, confidence: 0.6 }));
+  },
+
+  extractKeywords(title) {
+    if (!title) return [];
+    // Extract meaningful words (3+ chars, not common words)
+    const commonWords = ['the', 'and', 'for', 'with', 'from', 'about', 'this', 'that', 'page'];
+    return title.toLowerCase()
+      .split(/\W+/)
+      .filter(word => word.length >= 3 && !commonWords.includes(word))
+      .slice(0, 5);
+  },
+
+  extractDomain(url) {
+    try {
+      return new URL(url).hostname;
+    } catch {
+      return null;
+    }
+  },
+
+  extractSubdomain(url) {
+    try {
+      const parts = new URL(url).hostname.split('.');
+      return parts.length >= 2 ? parts.slice(-2).join('.') : null;
+    } catch {
+      return null;
+    }
+  },
+
+  calculatePatternBoost(tab, patterns) {
+    let boost = 0;
+    patterns.domainGroups?.forEach(group => {
+      if (group.tabs.some(t => t.id === tab.id)) boost += 0.3;
+    });
+    patterns.toolEcosystems?.forEach(group => {
+      if (group.tabs.some(t => t.id === tab.id)) boost += 0.4;
+    });
+    patterns.keywordMatches?.forEach(group => {
+      if (group.tabs.some(t => t.id === tab.id)) boost += 0.1;
+    });
+    return Math.min(boost, 0.5);
+  }
+};
+
 class BetterTabsAI {
   constructor() {
     this.session = null;
@@ -753,7 +893,7 @@ class BetterTabsAI {
       }
 
       // Build the analysis prompt
-      const prompt = `Analyze this web page and categorize it with specific, granular groupings:
+      const prompt = `Analyze this web page and categorize it for intelligent tab grouping:
 
 Title: ${metadata.title}
 URL: ${metadata.url}
@@ -762,31 +902,49 @@ ${content.metaDescription ? `Description: ${content.metaDescription}` : ''}
 ${content.excerpt ? `Content excerpt: ${content.excerpt}` : ''}
 ${content.headings?.length ? `Headings: ${content.headings.join(', ')}` : ''}
 
-Instructions for categorization:
-1. Create SPECIFIC categories that group related content meaningfully
-2. For shopping sites, include the store name (e.g., "Amazon Shopping", "eBay Shopping")
-3. For development content, include the technology/topic (e.g., "React Development", "Gemini Nano Development")
-4. For news/articles, group by topic area (e.g., "Tech News", "Politics News")
-5. For social media, include platform (e.g., "Twitter Social", "LinkedIn Professional")
-6. For documentation, include the technology (e.g., "Python Documentation", "Chrome API Documentation")
+CRITICAL INSTRUCTIONS for categorization:
 
-Examples of good specific categories:
-- "Amazon Shopping" instead of just "Shopping"
-- "GitHub Development" instead of just "Development"
-- "YouTube Entertainment" instead of just "Entertainment"
-- "Gemini Nano Development" for AI/ML development content
-- "React Development" for React-related pages
-- "Tech News" for technology news articles
+1. **Domain Similarity is Key**: If the domain matches other tabs, they should likely be grouped together
+   - Same exact domain = very likely related (amazon.com tabs go together)
+   - Same parent domain = likely related (docs.google.com and drive.google.com)
+
+2. **Recognize Tool Ecosystems**: Look for these common patterns:
+   - Media servers: Radarr, Sonarr, Lidarr, Prowlarr, autobrr (→ "Media Server Tools")
+   - Google services: Docs, Drive, Gmail, Calendar (→ "Google Workspace")
+   - Game tools: DIM, Braytech, light.gg (→ "Destiny Tools" or game name)
+   - Development: GitHub, GitLab, Stack Overflow (→ "Development Tools")
+
+3. **Shopping & Search Relationships**: Recognize when tabs are about the same topic
+   - "ladder stabilizers" search + Home Depot "Ladder Accessories" = both about ladders/home improvement
+   - Group by shopping topic, not just store: "Ladder Shopping" or "Home Improvement Shopping"
+
+4. **Specific Categories** - Include identifying details:
+   - Shopping: "{Store} Shopping" or "{Topic} Shopping" (e.g., "Ladder Shopping", "Amazon Electronics")
+   - Development: "{Technology} Development" (e.g., "React Development", "Python Development")
+   - Documentation: "{Technology} Docs" (e.g., "Chrome API Docs", "React Docs")
+   - Social: "{Platform} Social" (e.g., "Twitter", "LinkedIn")
+
+5. **Keywords Matter**: Extract topic-specific keywords that help identify relationships
+   - For shopping: include product type (ladder, electronics, furniture)
+   - For development: include technologies (react, python, gemini, chrome)
+   - For tools: include tool names (radarr, dim, braytech)
+
+Examples of GOOD categorization:
+- Home Depot page about ladders → category: "Home Improvement Shopping", keywords: ["ladder", "home depot", "tools"]
+- Google search "ladder stabilizers" → category: "Shopping Results", keywords: ["ladder", "stabilizer", "shopping"]
+- Radarr web UI → category: "Media Server Tools", keywords: ["radarr", "media", "automation"]
+- DIM (Destiny Item Manager) → category: "Destiny Tools", keywords: ["destiny", "dim", "game"]
+- GitHub repo page → category: "Development Tools", keywords: ["github", "code", "repository"]
 
 IMPORTANT: Respond with ONLY the raw JSON object, without any markdown formatting, code blocks, or explanatory text.
 
 Provide a JSON response with this exact structure:
 {
-  "category": "specific descriptive category that would be useful for tab grouping",
+  "category": "specific category that emphasizes relationships and grouping potential",
   "subcategory": "even more specific if needed",
-  "summary": "brief 1-sentence summary of what this page is about",
-  "keywords": ["3-5", "relevant", "keywords"],
-  "confidence": 0.8
+  "summary": "brief 1-sentence summary emphasizing topic/purpose",
+  "keywords": ["topic-specific", "keywords", "for-matching", "related-tabs"],
+  "confidence": 0.7
 }`;
 
       // Use the persistent service worker AI session
@@ -1060,11 +1218,42 @@ Provide a JSON response with this exact structure:
 
       console.log('📊 Suggesting groups from', analyses.length, 'analyses');
 
+      // PHASE B: Detect patterns before grouping
+      const tabs = analyses.map(a => ({
+        id: a.tabId,
+        title: a.title,
+        url: a.url,
+        domain: a.domain
+      }));
+      const patterns = PatternDetector.detectPatterns(tabs);
+      console.log('🔍 Detected patterns:', {
+        domainGroups: patterns.domainGroups.length,
+        subdomainGroups: patterns.subdomainGroups.length,
+        toolEcosystems: patterns.toolEcosystems.length,
+        keywordMatches: patterns.keywordMatches.length
+      });
+
+      // Boost confidence for tabs with strong patterns
+      analyses.forEach(analysis => {
+        const tab = tabs.find(t => t.id === analysis.tabId);
+        if (tab) {
+          const boost = PatternDetector.calculatePatternBoost(tab, patterns);
+          if (boost > 0) {
+            analysis.confidence = Math.min((analysis.confidence || 0.5) + boost, 1.0);
+            console.log(`  ⬆️ Boosted confidence for "${analysis.title}" by ${boost.toFixed(2)}`);
+          }
+        }
+      });
+
       // Get existing tab groups to check for matches
       const existingGroups = await this.getExistingGroupInfo();
       console.log('📁 Found', existingGroups.length, 'existing groups:', existingGroups.map(g => g.title).join(', '));
 
-      // First, group by exact category match
+      // First, check if patterns suggest immediate groupings
+      const patternSuggestions = this.createSuggestionsFromPatterns(patterns, analyses);
+      console.log('🎯 Pattern-based suggestions:', patternSuggestions.length);
+
+      // Then, group by exact category match
       const exactGroups = {};
       analyses.forEach(analysis => {
         const category = analysis.category || 'Uncategorized';
@@ -1078,6 +1267,12 @@ Provide a JSON response with this exact structure:
       console.log('📋 Category groups:', Object.entries(exactGroups).map(([cat, tabs]) => `${cat} (${tabs.length})`).join(', '));
 
       const suggestions = [];
+
+      // Add pattern-based suggestions first (highest confidence)
+      if (patternSuggestions.length > 0) {
+        console.log('🎯 Adding', patternSuggestions.length, 'pattern-based suggestions');
+        suggestions.push(...patternSuggestions);
+      }
 
       // Check for tabs that could be added to existing groups
       const addToGroupSuggestions = await this.suggestAddToExistingGroups(analyses, existingGroups);
@@ -1132,6 +1327,57 @@ Provide a JSON response with this exact structure:
       console.error('Error suggesting groups:', error);
       return { suggestions: [], existingGroups: [] };
     }
+  }
+
+  createSuggestionsFromPatterns(patterns, analyses) {
+    const suggestions = [];
+
+    // Tool ecosystems get highest priority
+    patterns.toolEcosystems?.forEach(ecosystem => {
+      const tabs = ecosystem.tabs.map(t => analyses.find(a => a.tabId === t.id)).filter(Boolean);
+      if (tabs.length >= 2) {
+        suggestions.push({
+          groupName: ecosystem.name,
+          color: this.getCategoryColor(ecosystem.name),
+          tabs: tabs,
+          confidence: ecosystem.confidence,
+          source: 'pattern-ecosystem'
+        });
+      }
+    });
+
+    // Domain groups (same exact domain)
+    patterns.domainGroups?.forEach(group => {
+      const tabs = group.tabs.map(t => analyses.find(a => a.tabId === t.id)).filter(Boolean);
+      if (tabs.length >= 2) {
+        const domainName = group.domain.split('.')[0];
+        const capitalizedName = domainName.charAt(0).toUpperCase() + domainName.slice(1);
+        suggestions.push({
+          groupName: `${capitalizedName} Tabs`,
+          color: this.getCategoryColor('default'),
+          tabs: tabs,
+          confidence: group.confidence,
+          source: 'pattern-domain'
+        });
+      }
+    });
+
+    // Keyword matches (shared keywords in titles)
+    patterns.keywordMatches?.forEach(group => {
+      const tabs = group.tabs.map(t => analyses.find(a => a.tabId === t.id)).filter(Boolean);
+      if (tabs.length >= 3) { // Higher threshold for keyword matches
+        const keyword = group.keyword.charAt(0).toUpperCase() + group.keyword.slice(1);
+        suggestions.push({
+          groupName: `${keyword} Related`,
+          color: this.getCategoryColor('default'),
+          tabs: tabs,
+          confidence: group.confidence,
+          source: 'pattern-keyword'
+        });
+      }
+    });
+
+    return suggestions;
   }
 
   createSubGroups(tabs, mainCategory) {
