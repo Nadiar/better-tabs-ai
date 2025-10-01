@@ -59,3 +59,29 @@ web-ext-artifacts/
 # Backup files
 *.bak
 *.backup
+
+# Claude AI and development files
+CLAUDE.md
+*claude*
+*CLAUDE*
+
+# Testing and mock files
+tests/
+*test*
+*mock*
+*Test*
+*Mock*
+
+# Decision and planning documents
+*decisions*
+*-decisions.md
+*-planning.md
+
+# Temporary and diagnostic files
+*temp*
+*diagnostic*
+performance_test_results.txt
+test-extension.html
+
+# Development artifacts
+*.orig
