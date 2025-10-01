@@ -52,7 +52,25 @@ Drag tabs between groups with smooth visual feedback and staged changes
 
 AI analyzes ungrouped tabs and suggests intelligent groupings with confidence scores
 
-## Latest Updates (v1.5.2)
+## Latest Updates (v2.0.0)
+
+### 🎉 Major Release: Full Drag & Drop Interface Complete (Phases 7-8)
+
+#### **✅ Phase 7: Undo/Redo & Polish**
+- **Undo/Redo**: Track last 5 state snapshots with keyboard shortcuts (Ctrl+Z, Ctrl+Shift+Z, Ctrl+Y)
+- **Undo/Redo Buttons**: Visual buttons in header with descriptive tooltips
+- **Custom Tooltips**: Rich tooltips showing full tab title and URL on hover (500ms delay)
+- **Enhanced Progress**: Progress bar with percentage for 20+ operations
+- **Keyboard Support**: Full keyboard shortcut integration for undo/redo operations
+
+#### **✅ Phase 8: Performance & Optimization**
+- **Memoization**: useMemo and useCallback optimizations to prevent unnecessary re-renders
+- **Animation Throttling**: Faster transitions (0.1s) for 50+ tabs
+- **Heavy Load Mode**: Disabled animations for 100+ tabs to maintain 60fps
+- **Smart Filtering**: Memoized tab filtering to improve search performance
+- **Reduced Re-renders**: Callback memoization in GroupsColumn and UngroupedColumn
+
+## Previous Updates (v1.5.2)
 
 ### 🚀 Full Interface Implementation (Phases 1-6 Complete)
 
