@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo, useCallback } from 'react';
 import GroupContainer from './GroupContainer';
 import SuggestedGroup from './SuggestedGroup';
 import { useStagedStateContext } from '../app';
@@ -9,12 +9,14 @@ function GroupsColumn({ groups, tabs, suggestions, duplicateTabs = [] }) {
   const { updateStaged } = useStagedStateContext();
 
   // Mix suggestions with existing groups (suggestions displayed first)
-  const items = [];
+  // Memoize to avoid recalculating on every render
+  const items = useMemo(() => {
+    const result = [];
 
   // Add suggestions first
   if (suggestions && suggestions.length > 0) {
     suggestions.forEach((suggestion, index) => {
-      items.push({
+      result.push({
         type: 'suggestion',
         key: `suggestion-${index}`,
         data: suggestion,
@@ -25,14 +27,17 @@ function GroupsColumn({ groups, tabs, suggestions, duplicateTabs = [] }) {
 
   // Add existing groups
   groups.forEach(group => {
-    items.push({
+    result.push({
       type: 'group',
       key: `group-${group.id}`,
       data: group
     });
   });
 
-  const handleCreateSuggestion = (suggestion, index) => {
+    return result;
+  }, [groups, suggestions]);
+
+  const handleCreateSuggestion = useCallback((suggestion, index) => {
     updateStaged((draft) => {
       // Generate new group ID
       const newGroupId = Math.min(...draft.groups.map(g => g.id), -1) - 1;
@@ -57,11 +62,11 @@ function GroupsColumn({ groups, tabs, suggestions, duplicateTabs = [] }) {
 
     // Remove suggestion from list
     window.dispatchEvent(new CustomEvent('dismissSuggestion', { detail: { index } }));
-  };
+  }, [updateStaged]);
 
-  const handleDismissSuggestion = (index) => {
+  const handleDismissSuggestion = useCallback((index) => {
     window.dispatchEvent(new CustomEvent('dismissSuggestion', { detail: { index } }));
-  };
+  }, []);
 
   return (
     <div className="column groups-column">

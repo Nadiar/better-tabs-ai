@@ -1,11 +1,15 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import TabCard from './TabCard';
 
 
 // Ungrouped Tabs Column - Droppable area for ungrouped tabs
 function UngroupedColumn({ tabs, duplicateTabs }) {
-  const ungroupedTabs = tabs.filter(tab => tab.groupId === -1);
+  // Memoize filtered tabs to avoid recalculating on every render
+  const ungroupedTabs = useMemo(() =>
+    tabs.filter(tab => tab.groupId === -1),
+    [tabs]
+  );
 
   const { setNodeRef, isOver } = useDroppable({
     id: 'ungrouped-column'

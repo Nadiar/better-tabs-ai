@@ -59,3 +59,18 @@
   transform: scale(1.2);
   transition: transform 0.2s ease;
 }
+
+/* Performance: Reduce animations for large tab counts */
+.app-container[data-tab-count="50"] .tab-card,
+.app-container[data-tab-count="100"] .tab-card {
+  transition: all 0.1s ease; /* Faster transitions */
+}
+
+.app-container[data-tab-count="100"] .tab-card.dragging-overlay {
+  animation: none; /* Disable animations for 100+ tabs */
+  transform: rotate(0deg); /* Remove rotation */
+}
+
+.app-container[data-tab-count="100"] .new-group-box.drag-over {
+  transform: none; /* Disable scale animation */
+}

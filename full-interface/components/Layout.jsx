@@ -186,7 +186,13 @@ function Layout() {
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
-      <div className="app-container">
+      <div
+        className="app-container"
+        data-tab-count={
+          stagedState.tabs.length >= 100 ? "100" :
+          stagedState.tabs.length >= 50 ? "50" : "0"
+        }
+      >
         <Header
           hasChanges={hasChanges}
           onApply={handleApply}
