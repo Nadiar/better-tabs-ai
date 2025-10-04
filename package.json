@@ -1,4 +1,14 @@
 {
+  "name": "better-tabs-ai",
+  "version": "2.1.0",
+  "description": "AI-powered Chrome extension for intelligent tab organization",
+  "scripts": {
+    "test": "playwright test",
+    "test:ui": "playwright test --ui",
+    "test:headed": "playwright test --headed",
+    "test:debug": "playwright test --debug",
+    "test:report": "playwright show-report"
+  },
   "devDependencies": {
     "@playwright/test": "^1.55.1",
     "msw": "^2.11.3",
