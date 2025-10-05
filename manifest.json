@@ -4,7 +4,7 @@
   "description": "AI-powered tab organization and grouping with automatic summarization",
   "version": "2.1.0",
   "action": {
-    "default_popup": "popup/popup.html",
+    "default_popup": "popup-react/dist/index.html",
     "default_title": "Better Tabs AI",
     "default_icon": {
       "16": "icons/icon16.png",
@@ -45,5 +45,6 @@
       "resources": ["utils/*.js", "full-interface/*"],
       "matches": ["<all_urls>"]
     }
-  ]
+  ],
+  "options_page": "options/options.html"
 }

@@ -80,7 +80,10 @@ export interface AnalysisResult {
  */
 export interface AIStatus {
   available: boolean;
-  status: 'ready' | 'not_ready' | 'downloading' | 'error';
+  status: 'ready' | 'not_ready' | 'downloading' | 'error' | 'unknown-error' | 'flags-disabled' | 'gpu-unavailable' | 'storage-full' | 'unsupported-browser' | 'download-required';
+  statusMessage?: string;
+  detailedStatus?: string;
+  action?: string;
   error?: string;
   capabilities?: {
     analyze: boolean;
