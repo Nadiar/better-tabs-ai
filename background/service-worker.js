@@ -729,8 +729,8 @@ class BetterTabsAI {
           const age = Date.now() - stored.lastAnalysisTime;
           const tabCountChanged = stored.lastAnalysisTabCount !== groupableTabs.length;
 
-          // Use cached results if tab count hasn't changed
-          if (!tabCountChanged) {
+          // Use cached results if tab count hasn't changed and cache is valid
+          if (!tabCountChanged && stored.lastAnalysisResults && stored.lastAnalysisResults.analyses) {
             console.log('✅ Using cached analysis results (age:', Math.round(age / 1000), 'seconds, tab count unchanged)');
             return {
               ...stored.lastAnalysisResults,
@@ -738,8 +738,10 @@ class BetterTabsAI {
               cacheAge: age,
               message: `Using cached analysis (${Math.round(age / 1000)}s old)`
             };
-          } else {
+          } else if (tabCountChanged) {
             console.log('🔄 Tab count changed:', stored.lastAnalysisTabCount, '→', groupableTabs.length, '- refreshing analysis');
+          } else {
+            console.log('🗑️ Cached results invalid, refreshing analysis');
           }
         }
       }
