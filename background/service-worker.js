@@ -743,11 +743,12 @@ class BetterTabsAI {
 
       if (groupableTabs.length === 0) {
         return {
+          success: true,
           totalTabs: tabs.length,
           ungroupedTabs: 0,
           analyses: [],
           suggestions: [],
-          message: 'No groupable tabs found (filtered out special pages, new tabs, and already grouped tabs)'
+          message: 'All tabs have been analyzed or filtered out (special pages, PWAs, already grouped)'
         };
       }
 

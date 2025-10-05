@@ -556,6 +556,13 @@ function App() {
         return;
       }
 
+      // Check if no tabs to analyze
+      if (result.data.analyses?.length === 0 && result.data.suggestions?.length === 0) {
+        NotificationManager.info(result.data.message || 'No tabs to analyze');
+        setIsAnalyzing(false);
+        return;
+      }
+
       // Check if using cached results
       const isCached = (result.data as any).cached;
 
