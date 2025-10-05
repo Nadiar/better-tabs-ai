@@ -764,16 +764,19 @@ class BetterTabsAI {
 
       // Return immediately with status
       return {
+        success: true,
         started: true,
         totalTabs: tabs.length,
         analyzingTabs: groupableTabs.length,
+        analyses: [],
+        suggestions: [],
         message: 'Analysis started in background. Close popup if needed - results will be saved.',
         progress: this.analysisProgress
       };
     } catch (error) {
       console.error('Error in analyzeAllTabs:', error);
       this.analysisInProgress = false;
-      return { error: error.message };
+      return { success: false, error: error.message };
     }
   }
 
