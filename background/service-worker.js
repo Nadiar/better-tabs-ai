@@ -386,7 +386,7 @@ class BetterTabsAI {
       this.settings = { ...this.settings, ...newSettings };
       await chrome.storage.sync.set({ betterTabsSettings: this.settings });
       console.log('💾 Saved settings:', this.settings);
-      return { success: true };
+      return { success: true, settings: this.settings };
     } catch (error) {
       console.error('Error saving settings:', error);
       return { success: false, error: error.message };
