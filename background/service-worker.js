@@ -1386,31 +1386,37 @@ Provide a JSON response with this exact structure:
         await this.createAISession();
       }
 
-      console.log('📊 Suggesting groups from', analyses.length, 'analyses using AI');
+      console.log('📊 Suggesting groups from', analyses.length, 'tabs using AI (direct grouping)');
 
-      // Prepare tab summaries for AI (focus on content, not domains)
+      // Prepare tab data for AI - use RAW titles/URLs, ignore pre-categorization
       const tabSummaries = analyses.map(a => ({
         id: a.tabId,
         title: a.title,
-        category: a.category,
-        subcategory: a.subcategory,
-        summary: a.summary,
-        confidence: a.confidence
+        url: a.url,
+        domain: a.domain
       }));
 
       // Ask AI to suggest groupings based on semantic similarity
-      const groupingPrompt = `You are analyzing browser tabs to suggest logical groupings. Focus on CONTENT and PURPOSE, not domain names.
+      const groupingPrompt = `Analyze these browser tabs and suggest logical groupings based on their TITLES and DOMAINS.
 
-Here are the tabs:
-${tabSummaries.map((t, i) => `${i + 1}. "${t.title}" - ${t.category}${t.subcategory ? ' > ' + t.subcategory : ''}: ${t.summary}`).join('\n')}
+Tabs:
+${tabSummaries.map((t, i) => `${i + 1}. "${t.title}" (${t.domain})`).join('\n')}
 
-Suggest 2-${this.settings.maxSuggestions} meaningful groups based on:
-- Shared topics/purposes (e.g., "Real Estate Search", "Woodworking Projects", "Social Media")
-- Work context (e.g., "Shopping", "Research", "Development")
-- Related activities (NOT just same domain)
+Rules:
+- Group tabs by ACTUAL CONTENT/PURPOSE (e.g., "House Hunting in Woodburn", "MFT Workbench Project", "Social Media")
+- Each group needs 2+ tabs
+- Each tab can only be in ONE group
+- Ignore technical domains - focus on what the user is actually doing
+- DON'T group unrelated tabs just because they're from the same domain
 
-AVOID generic names like "Www Tabs", "Domain Tabs", "Tools" - be specific about the PURPOSE.
-Each group must have 2+ tabs. Tabs can only be in ONE group.
+Examples of GOOD grouping:
+- Multiple Zillow tabs about Woodburn → "House Hunting in Woodburn"
+- Tabs about MFT drilling guides, router templates → "MFT Workbench Setup"
+- Multiple Bluesky tabs → "Bluesky Social Media"
+
+Examples of BAD grouping:
+- Google Messages + woodworking tabs (totally unrelated!)
+- "Tools" (too generic - what KIND of tools?)
 
 Return JSON array:
 [
