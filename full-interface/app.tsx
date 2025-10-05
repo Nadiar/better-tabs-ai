@@ -642,12 +642,15 @@ function App() {
 
           console.log('📋 Poll complete, resultsResponse:', resultsResponse);
 
+          console.log('📊 Analysis complete! Results:', resultsResponse);
+
           if (resultsResponse.results && resultsResponse.results.suggestions) {
-            console.log('✅ Setting suggestions:', resultsResponse.results.suggestions);
+            console.log(`✅ Setting ${resultsResponse.results.suggestions.length} suggestions:`, resultsResponse.results.suggestions);
             setSuggestions(resultsResponse.results.suggestions);
-            NotificationManager.success(`Found ${resultsResponse.results.suggestions.length} grouping suggestions`);
+            NotificationManager.success(`Analysis complete! Found ${resultsResponse.results.suggestions.length} grouping suggestions`);
           } else {
             console.warn('⚠️ No suggestions in resultsResponse:', resultsResponse);
+            NotificationManager.info('Analysis complete - no suggestions generated');
           }
 
           setIsAnalyzing(false);

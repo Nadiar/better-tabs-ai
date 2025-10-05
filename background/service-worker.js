@@ -821,10 +821,17 @@ class BetterTabsAI {
     const MAX_CONCURRENT = this.settings.maxConcurrentAnalysis || 5;
     const queue = [...tabs]; // Copy array
     const inProgress = new Set();
+    const retryQueue = []; // Tabs that timed out, will retry with delay
     let completed = 0;
+    let delayBetweenRetries = 0; // Incremental delay to prevent more timeouts
 
-    const analyzeWithTimeout = async (tab) => {
+    const analyzeWithTimeout = async (tab, isRetry = false) => {
       try {
+        // Add delay for retries to prevent repeated timeouts
+        if (isRetry && delayBetweenRetries > 0) {
+          await new Promise(resolve => setTimeout(resolve, delayBetweenRetries));
+        }
+
         const analysisPromise = this.analyzeTab(tab.id, tab);
         const timeoutPromise = new Promise((_, reject) =>
           setTimeout(() => reject(new Error('Analysis timeout')), 30000)
@@ -841,7 +848,13 @@ class BetterTabsAI {
         return null;
       } catch (error) {
         if (error.message === 'Analysis timeout') {
-          console.warn(`⏱️ Timeout analyzing tab ${tab.id}: ${tab.title}`);
+          if (!isRetry) {
+            console.warn(`⏱️ Timeout analyzing tab ${tab.id}: ${tab.title} - will retry with delay`);
+            retryQueue.push(tab);
+            delayBetweenRetries += 500; // Add 500ms delay for each timeout
+          } else {
+            console.error(`⏱️ Timeout on retry for tab ${tab.id}: ${tab.title} - skipping`);
+          }
         } else {
           console.error(`Error analyzing tab ${tab.id}:`, error);
         }
@@ -876,6 +889,36 @@ class BetterTabsAI {
     };
 
     await processNext();
+
+    // Process retry queue if there were timeouts
+    if (retryQueue.length > 0) {
+      console.log(`🔄 Retrying ${retryQueue.length} timed-out tabs with ${delayBetweenRetries}ms delay...`);
+      queue.push(...retryQueue);
+      retryQueue.length = 0; // Clear retry queue
+
+      // Process retries
+      while (queue.length > 0 || inProgress.size > 0) {
+        while (queue.length > 0 && inProgress.size < MAX_CONCURRENT) {
+          const tab = queue.shift();
+          const promise = analyzeWithTimeout(tab, true).then(result => {
+            inProgress.delete(promise);
+            completed++;
+            this.analysisProgress.current = completed;
+            console.log(`Progress (retry): ${completed}/${this.analysisProgress.total}`);
+
+            if (result) {
+              results.analyses.push(result);
+            }
+            return result;
+          });
+          inProgress.add(promise);
+        }
+
+        if (inProgress.size > 0) {
+          await Promise.race(inProgress);
+        }
+      }
+    }
 
     // Generate grouping suggestions
     if (results.analyses.length > 0) {
