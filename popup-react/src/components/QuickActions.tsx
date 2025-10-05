@@ -7,6 +7,7 @@ interface QuickActionsProps {
   onCopyDebug: () => void;
   isAnalyzing: boolean;
   analysisProgress: { current: number; total: number };
+  showAdvancedOptions: boolean;
 }
 
 function QuickActions({
@@ -16,6 +17,7 @@ function QuickActions({
   onCopyDebug,
   isAnalyzing,
   analysisProgress,
+  showAdvancedOptions,
 }: QuickActionsProps) {
   const getAnalyzeButtonText = () => {
     if (!isAnalyzing) return '🤖 Analyze & Group Tabs';
@@ -44,17 +46,21 @@ function QuickActions({
         🔍 Find Duplicates
       </button>
 
-      <button
-        id="clearCacheBtn"
-        className="secondary-btn"
-        onClick={onClearCache}
-      >
-        🧹 Clear Cache
-      </button>
+      {showAdvancedOptions && (
+        <>
+          <button
+            id="clearCacheBtn"
+            className="secondary-btn"
+            onClick={onClearCache}
+          >
+            🧹 Clear Cache
+          </button>
 
-      <button id="debugBtn" className="secondary-btn" onClick={onCopyDebug}>
-        🔍 Debug Info
-      </button>
+          <button id="debugBtn" className="secondary-btn" onClick={onCopyDebug}>
+            🔍 Debug Info
+          </button>
+        </>
+      )}
     </div>
   );
 }

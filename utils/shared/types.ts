@@ -118,6 +118,7 @@ export interface Settings {
   showConfidenceScores: boolean;
   showInlineSuggestions: boolean;
   defaultGroupColor: ChromeColor;
+  showAdvancedOptions: boolean;
 
   // Performance
   enableContentAnalysis: boolean;
@@ -134,6 +135,7 @@ export const DEFAULT_SETTINGS: Settings = {
   showConfidenceScores: true,
   showInlineSuggestions: true,
   defaultGroupColor: 'grey',
+  showAdvancedOptions: false,
   enableContentAnalysis: true,
   maxConcurrentAnalysis: 10,
   cacheDuration: 60000,

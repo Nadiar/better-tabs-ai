@@ -96,6 +96,13 @@ function populateForm(settings: Settings) {
     colorSelect.value = settings.defaultGroupColor;
   }
 
+  const showAdvancedCheckbox = document.getElementById(
+    'showAdvancedOptions'
+  ) as HTMLInputElement;
+  if (showAdvancedCheckbox) {
+    showAdvancedCheckbox.checked = settings.showAdvancedOptions;
+  }
+
   // Performance
   const enableContentCheckbox = document.getElementById(
     'enableContentAnalysis'
@@ -163,6 +170,7 @@ function getFormData(): Partial<Settings> {
     showConfidenceScores: getChecked('showConfidenceScores'),
     showInlineSuggestions: getChecked('showInlineSuggestions'),
     defaultGroupColor: getData('defaultGroupColor') as any,
+    showAdvancedOptions: getChecked('showAdvancedOptions'),
 
     // Performance
     enableContentAnalysis: getChecked('enableContentAnalysis'),

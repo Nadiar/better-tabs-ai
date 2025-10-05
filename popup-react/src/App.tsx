@@ -4,6 +4,7 @@ import {
   AIOperations,
   ChromeAPI,
   NotificationManager,
+  SettingsOperations,
   type AISuggestion,
   type AIStatus,
 } from '@shared';
@@ -47,12 +48,23 @@ function App() {
   // Duplicates
   const [duplicates, setDuplicates] = useState<any[]>([]);
 
+  // Settings
+  const [showAdvancedOptions, setShowAdvancedOptions] = useState(false);
+
   // Initialize: Check AI status and load tab stats
   useEffect(() => {
     checkAIStatus();
     updateTabStats();
     checkOngoingAnalysis();
+    loadSettings();
   }, []);
+
+  const loadSettings = async () => {
+    const result = await SettingsOperations.get();
+    if (result.success) {
+      setShowAdvancedOptions(result.data.showAdvancedOptions);
+    }
+  };
 
   const checkAIStatus = async (retryCount = 0) => {
     try {
@@ -430,13 +442,6 @@ function App() {
     window.close();
   };
 
-  const openSettings = () => {
-    chrome.tabs.create({
-      url: chrome.runtime.getURL('options/options.html'),
-    });
-    window.close();
-  };
-
   const showMessage = (message: string, type: 'info' | 'success' | 'error') => {
     setResultMessage(message);
     setResultType(type);
@@ -479,6 +484,7 @@ function App() {
             onCopyDebug={copyDebugInfo}
             isAnalyzing={isAnalyzing}
             analysisProgress={analysisProgress}
+            showAdvancedOptions={showAdvancedOptions}
           />
 
           <TabStats stats={tabStats} />
@@ -498,7 +504,6 @@ function App() {
 
       <Footer
         onOpenFullInterface={openFullInterface}
-        onOpenSettings={openSettings}
       />
     </div>
   );
