@@ -1434,8 +1434,12 @@ Provide a JSON response with this exact structure:
       const limited = filtered.slice(0, this.settings.maxSuggestions);
       console.log(`📋 Returning ${limited.length} suggestions (max: ${this.settings.maxSuggestions})`);
 
+      // Remove overlapping suggestions - keep only the highest confidence suggestion for each tab
+      const deduplicated = this.deduplicateSuggestions(limited);
+      console.log(`🔀 Deduplicated to ${deduplicated.length} non-overlapping suggestions`);
+
       // Transform suggestions to use tabIds instead of tabs array
-      const transformed = limited.map(s => {
+      const transformed = deduplicated.map(s => {
         // Analysis objects have 'tabId' property, not 'id'
         const tabIds = (s.tabs || []).map(t => t.tabId || t.id).filter(Boolean);
         console.log(`Transforming suggestion "${s.groupName}":`, {
@@ -1525,6 +1529,40 @@ Provide a JSON response with this exact structure:
     });
 
     return suggestions;
+  }
+
+  deduplicateSuggestions(suggestions) {
+    // Track which tabs are assigned to which suggestion (with confidence)
+    const tabAssignments = new Map(); // tabId -> { suggestionIndex, confidence }
+
+    // First pass: track all tab assignments
+    suggestions.forEach((suggestion, index) => {
+      (suggestion.tabs || []).forEach(tab => {
+        const tabId = tab.tabId || tab.id;
+        if (!tabId) return;
+
+        const existing = tabAssignments.get(tabId);
+        if (!existing || suggestion.confidence > existing.confidence) {
+          tabAssignments.set(tabId, { suggestionIndex: index, confidence: suggestion.confidence });
+        }
+      });
+    });
+
+    // Second pass: filter each suggestion to only include tabs assigned to it
+    const deduplicated = suggestions.map((suggestion, index) => {
+      const assignedTabs = (suggestion.tabs || []).filter(tab => {
+        const tabId = tab.tabId || tab.id;
+        const assignment = tabAssignments.get(tabId);
+        return assignment && assignment.suggestionIndex === index;
+      });
+
+      return {
+        ...suggestion,
+        tabs: assignedTabs
+      };
+    }).filter(s => s.tabs.length >= 2); // Remove suggestions with less than 2 tabs
+
+    return deduplicated;
   }
 
   createSubGroups(tabs, mainCategory) {
