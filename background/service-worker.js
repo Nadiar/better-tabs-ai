@@ -1008,17 +1008,18 @@ CRITICAL INSTRUCTIONS for categorization:
    - Documentation: "{Technology} Docs" (e.g., "Chrome API Docs", "React Docs")
    - Social: "{Platform} Social" (e.g., "Twitter", "LinkedIn")
 
-5. **Keywords Matter**: Extract topic-specific keywords that help identify relationships
-   - For shopping: include product type (ladder, electronics, furniture)
-   - For development: include technologies (react, python, gemini, chrome)
-   - For tools: include tool names (radarr, dim, braytech)
+5. **Specific is Better**: Include identifying details in categories
+   - Shopping: "{Topic} Shopping" or "{Store} Shopping"
+   - Development: "{Technology} Development"
+   - Documentation: "{Technology} Docs"
+   - Tools: "{Tool Name}" or "{Purpose} Tools"
 
 Examples of GOOD categorization:
-- Home Depot page about ladders → category: "Home Improvement Shopping", keywords: ["ladder", "home depot", "tools"]
-- Google search "ladder stabilizers" → category: "Shopping Results", keywords: ["ladder", "stabilizer", "shopping"]
-- Radarr web UI → category: "Media Server Tools", keywords: ["radarr", "media", "automation"]
-- DIM (Destiny Item Manager) → category: "Destiny Tools", keywords: ["destiny", "dim", "game"]
-- GitHub repo page → category: "Development Tools", keywords: ["github", "code", "repository"]
+- Home Depot page about ladders → category: "Home Improvement Shopping"
+- Google search "ladder stabilizers" → category: "Shopping Results"
+- Radarr web UI → category: "Media Server Tools"
+- DIM (Destiny Item Manager) → category: "Destiny Tools"
+- GitHub repo page → category: "Development Tools"
 
 IMPORTANT: Respond with ONLY the raw JSON object, without any markdown formatting, code blocks, or explanatory text.
 
@@ -1027,7 +1028,6 @@ Provide a JSON response with this exact structure:
   "category": "specific category that emphasizes relationships and grouping potential",
   "subcategory": "even more specific if needed",
   "summary": "brief 1-sentence summary emphasizing topic/purpose",
-  "keywords": ["topic-specific", "keywords", "for-matching", "related-tabs"],
   "confidence": 0.7
 }`;
 
