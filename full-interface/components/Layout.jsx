@@ -175,7 +175,7 @@ function Layout() {
 
   // Memoize columns to prevent unnecessary re-renders during drag
   const memoizedColumns = useMemo(() => ({
-    ungrouped: <UngroupedColumn tabs={filteredTabs} duplicateTabs={duplicateTabs} />,
+    ungrouped: <UngroupedColumn tabs={filteredTabs} duplicateTabs={duplicateTabs} suggestions={suggestions} />,
     groups: <GroupsColumn groups={stagedState.groups} tabs={filteredTabs} suggestions={suggestions} duplicateTabs={duplicateTabs} />,
     newGroup: <NewGroupBox />
   }), [filteredTabs, stagedState.groups, suggestions, duplicateTabs]);

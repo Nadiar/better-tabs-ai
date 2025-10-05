@@ -823,13 +823,13 @@ class BetterTabsAI {
     const inProgress = new Set();
     const retryQueue = []; // Tabs that timed out, will retry with delay
     let completed = 0;
-    let delayBetweenRetries = 0; // Incremental delay to prevent more timeouts
+    let progressiveDelay = 0; // Progressive delay for ALL tabs (100ms increments, max 1000ms)
 
     const analyzeWithTimeout = async (tab, isRetry = false) => {
       try {
-        // Add delay for retries to prevent repeated timeouts
-        if (isRetry && delayBetweenRetries > 0) {
-          await new Promise(resolve => setTimeout(resolve, delayBetweenRetries));
+        // Add progressive delay to ALL tabs to prevent overwhelming the AI
+        if (progressiveDelay > 0) {
+          await new Promise(resolve => setTimeout(resolve, progressiveDelay));
         }
 
         const analysisPromise = this.analyzeTab(tab.id, tab);
@@ -848,10 +848,15 @@ class BetterTabsAI {
         return null;
       } catch (error) {
         if (error.message === 'Analysis timeout') {
+          // Increase delay for ALL future tabs (100ms increments, max 1000ms)
+          if (progressiveDelay < 1000) {
+            progressiveDelay += 100;
+            console.log(`⏱️ Timeout detected, increasing delay to ${progressiveDelay}ms for future tabs`);
+          }
+
           if (!isRetry) {
             console.warn(`⏱️ Timeout analyzing tab ${tab.id}: ${tab.title} - will retry with delay`);
             retryQueue.push(tab);
-            delayBetweenRetries += 500; // Add 500ms delay for each timeout
           } else {
             console.error(`⏱️ Timeout on retry for tab ${tab.id}: ${tab.title} - skipping`);
           }
@@ -892,7 +897,7 @@ class BetterTabsAI {
 
     // Process retry queue if there were timeouts
     if (retryQueue.length > 0) {
-      console.log(`🔄 Retrying ${retryQueue.length} timed-out tabs with ${delayBetweenRetries}ms delay...`);
+      console.log(`🔄 Retrying ${retryQueue.length} timed-out tabs with ${progressiveDelay}ms delay...`);
       queue.push(...retryQueue);
       retryQueue.length = 0; // Clear retry queue
 

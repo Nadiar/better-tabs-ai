@@ -4,12 +4,22 @@ import TabCard from './TabCard';
 
 
 // Ungrouped Tabs Column - Droppable area for ungrouped tabs
-function UngroupedColumn({ tabs, duplicateTabs }) {
+function UngroupedColumn({ tabs, duplicateTabs, suggestions }) {
   // Memoize filtered tabs to avoid recalculating on every render
-  const ungroupedTabs = useMemo(() =>
-    tabs.filter(tab => tab.groupId === -1),
-    [tabs]
-  );
+  const ungroupedTabs = useMemo(() => {
+    // Get all tab IDs that are in suggestions
+    const suggestedTabIds = new Set();
+    if (suggestions && Array.isArray(suggestions)) {
+      suggestions.forEach(suggestion => {
+        if (suggestion.tabIds && Array.isArray(suggestion.tabIds)) {
+          suggestion.tabIds.forEach(id => suggestedTabIds.add(id));
+        }
+      });
+    }
+
+    // Filter to ungrouped tabs that are NOT in suggestions
+    return tabs.filter(tab => tab.groupId === -1 && !suggestedTabIds.has(tab.id));
+  }, [tabs, suggestions]);
 
   const { setNodeRef, isOver } = useDroppable({
     id: 'ungrouped-column'

@@ -619,9 +619,11 @@ function App() {
   };
 
   const pollForAnalysisResults = () => {
+    console.log('🔄 Starting to poll for analysis results...');
     const pollInterval = setInterval(async () => {
       try {
         const progressResult = await AIOperations.getAnalysisProgress();
+        console.log('📊 Poll check - progress:', progressResult.data);
 
         if (!progressResult.success) {
           clearInterval(pollInterval);
