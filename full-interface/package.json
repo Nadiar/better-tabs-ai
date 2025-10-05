@@ -9,7 +9,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "typecheck": "echo 'TypeScript checking not configured for full-interface (JSX)'"
   },
   "keywords": [],
   "author": "",
