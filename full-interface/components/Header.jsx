@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 
 // Header Component with Search, Apply/Cancel/Analyze/Undo/Redo buttons
-function Header({ hasChanges, onApply, onCancel, onAnalyze, isApplying, isAnalyzing, analysisProgress, onSearchChange, undoRedo, onClearCache, onCopyDebug }) {
+function Header({ hasChanges, onApply, onCancel, onAnalyze, isApplying, isAnalyzing, analysisProgress, onSearchChange, undoRedo, onClearCache, onCopyDebug, showAdvancedOptions }) {
   const logoUrl = chrome.runtime.getURL('icons/icon32.png');
   const [searchTerm, setSearchTerm] = useState('');
   const searchTimeout = useRef(null);
@@ -85,22 +85,26 @@ function Header({ hasChanges, onApply, onCancel, onAnalyze, isApplying, isAnalyz
             ? '🤖 Analyzing...'
             : '🤖 Analyze'}
         </button>
-        <button
-          className="btn-secondary"
-          onClick={onClearCache}
-          disabled={isApplying}
-          title="Clear AI analysis cache"
-        >
-          🧹 Clear Cache
-        </button>
-        <button
-          className="btn-secondary"
-          onClick={onCopyDebug}
-          disabled={isApplying}
-          title="Copy debug information to clipboard"
-        >
-          🔍 Debug Info
-        </button>
+        {showAdvancedOptions && (
+          <>
+            <button
+              className="btn-secondary"
+              onClick={onClearCache}
+              disabled={isApplying}
+              title="Clear AI analysis cache"
+            >
+              🧹 Clear Cache
+            </button>
+            <button
+              className="btn-secondary"
+              onClick={onCopyDebug}
+              disabled={isApplying}
+              title="Copy debug information to clipboard"
+            >
+              🔍 Debug Info
+            </button>
+          </>
+        )}
         <button
           className="btn-secondary"
           onClick={onCancel}

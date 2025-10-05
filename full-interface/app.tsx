@@ -14,6 +14,7 @@ import {
   AIOperations,
   ChromeAPI,
   NotificationManager,
+  SettingsOperations,
   NOTIFICATION_EVENT,
   type Toast
 } from '@shared';
@@ -55,6 +56,7 @@ interface StagedStateContextValue {
   suggestions: AISuggestion[] | null;
   searchTerm: string;
   duplicateTabs: number[];
+  showAdvancedOptions: boolean;
   undoRedo: ReturnType<typeof useUndoRedo>;
   updateStaged: (updaterFn: ((draft: AppState) => void) | Partial<AppState>) => void;
   resetToOriginal: () => void;
@@ -105,6 +107,7 @@ function App() {
   const [searchTerm, setSearchTerm] = useState('');
   const [duplicateTabs, setDuplicateTabs] = useState<number[]>([]);
   const [lastAnalysisClick, setLastAnalysisClick] = useState(0);
+  const [showAdvancedOptions, setShowAdvancedOptions] = useState(false);
 
   // Undo/Redo functionality
   const undoRedo = useUndoRedo(stagedState, setStagedState);
@@ -116,6 +119,7 @@ function App() {
   // Load initial data from Chrome
   useEffect(() => {
     loadChromeData();
+    loadSettings();
 
     // Set up listeners for external Chrome changes
     const handleTabUpdate = () => {
@@ -194,6 +198,13 @@ function App() {
     window.addEventListener(NOTIFICATION_EVENT, handleNotification);
     return () => window.removeEventListener(NOTIFICATION_EVENT, handleNotification);
   }, []);
+
+  const loadSettings = async () => {
+    const result = await SettingsOperations.get();
+    if (result.success) {
+      setShowAdvancedOptions(result.data.showAdvancedOptions);
+    }
+  };
 
   const loadChromeData = async () => {
     try {
@@ -696,6 +707,7 @@ function App() {
     suggestions,
     searchTerm,
     duplicateTabs,
+    showAdvancedOptions,
     undoRedo,
     updateStaged,
     resetToOriginal,
