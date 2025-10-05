@@ -670,12 +670,25 @@ class BetterTabsAI {
     const url = tab.url || '';
     const title = tab.title || '';
 
-    // Skip special Chrome pages
+    // Skip special Chrome/browser pages
     if (url.startsWith('chrome://') ||
         url.startsWith('chrome-extension://') ||
         url.startsWith('edge://') ||
         url.startsWith('about:') ||
-        url.startsWith('file://')) {
+        url.startsWith('file://') ||
+        url.startsWith('devtools://') ||
+        url.startsWith('view-source:')) {
+      return false;
+    }
+
+    // Skip Chrome Web Store and other restricted Google pages
+    if (url.includes('chrome.google.com/webstore') ||
+        url.includes('chromewebstore.google.com')) {
+      return false;
+    }
+
+    // Skip PDF viewer extension pages
+    if (url.includes('chrome-extension://') && url.includes('.pdf')) {
       return false;
     }
 
