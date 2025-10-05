@@ -120,6 +120,7 @@ function App() {
   useEffect(() => {
     loadChromeData();
     loadSettings();
+    loadSuggestions();
 
     // Set up listeners for external Chrome changes
     const handleTabUpdate = () => {
@@ -203,6 +204,18 @@ function App() {
     const result = await SettingsOperations.get();
     if (result.success) {
       setShowAdvancedOptions(result.data.showAdvancedOptions);
+    }
+  };
+
+  const loadSuggestions = async () => {
+    try {
+      const response = await chrome.runtime.sendMessage({ action: 'getLastAnalysisResults' });
+      if (response.results && response.results.suggestions) {
+        console.log('📋 Loaded suggestions on mount:', response.results.suggestions);
+        setSuggestions(response.results.suggestions);
+      }
+    } catch (error) {
+      console.error('Failed to load suggestions:', error);
     }
   };
 
@@ -505,7 +518,8 @@ function App() {
         lastResults: lastResults ? {
           hasResults: !!lastResults.results,
           suggestionCount: lastResults.results?.suggestions?.length || 0,
-          analysisCount: lastResults.results?.analyses?.length || 0
+          analysisCount: lastResults.results?.analyses?.length || 0,
+          suggestions: lastResults.results?.suggestions
         } : null,
         currentState: {
           totalTabs: tabsResult.success ? tabsResult.data.length : 0,
@@ -513,9 +527,10 @@ function App() {
           groupedTabs: tabsResult.success ? tabsResult.data.filter(t => t.groupId !== chrome.tabGroups.TAB_GROUP_ID_NONE).length : 0,
           hasChanges: hasChanges,
           stagedGroups: stagedState.groups.length,
-          stagedTabs: stagedState.tabs.length
-        },
-        suggestions: suggestions
+          stagedTabs: stagedState.tabs.length,
+          suggestionsInState: suggestions?.length || 0,
+          suggestionsState: suggestions
+        }
       };
 
       const debugText = JSON.stringify(debugInfo, null, 2);
