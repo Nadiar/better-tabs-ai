@@ -552,7 +552,8 @@ class BetterTabsAI {
 
         case 'clearCache':
           this.cacheManager.clear();
-          console.log('🧹 Analysis cache cleared');
+          await chrome.storage.local.remove(['lastAnalysisResults', 'lastAnalysisTime', 'lastAnalysisTabCount']);
+          console.log('🧹 Analysis cache cleared (including stored results)');
           sendResponse({ success: true, stats: this.cacheManager.getStats() });
           break;
 
