@@ -587,7 +587,6 @@ function App() {
             pollForAnalysisResults();
           } else if (refreshResult.suggestions) {
             setSuggestions(refreshResult.suggestions);
-            applySuggestionsToStaged(refreshResult.suggestions);
             NotificationManager.success(`Found ${refreshResult.suggestions.length} grouping suggestions`);
             setIsAnalyzing(false);
           }
@@ -595,7 +594,6 @@ function App() {
           // First click - use cached results
           const cachedSuggestions = result.data.suggestions || [];
           setSuggestions(cachedSuggestions);
-          applySuggestionsToStaged(cachedSuggestions);
           NotificationManager.success((result.data as any).message || 'Analysis complete (cached)' + ' - Click again to force refresh');
           setIsAnalyzing(false);
         }
@@ -610,7 +608,6 @@ function App() {
         console.log('✅ Immediate results, suggestions:', result.data.suggestions);
         setLastAnalysisClick(Date.now());
         setSuggestions(result.data.suggestions);
-        applySuggestionsToStaged(result.data.suggestions);
         NotificationManager.success(`Found ${result.data.suggestions.length} grouping suggestions`);
         setIsAnalyzing(false);
       }
@@ -648,7 +645,6 @@ function App() {
           if (resultsResponse.results && resultsResponse.results.suggestions) {
             console.log('✅ Setting suggestions:', resultsResponse.results.suggestions);
             setSuggestions(resultsResponse.results.suggestions);
-            applySuggestionsToStaged(resultsResponse.results.suggestions);
             NotificationManager.success(`Found ${resultsResponse.results.suggestions.length} grouping suggestions`);
           } else {
             console.warn('⚠️ No suggestions in resultsResponse:', resultsResponse);

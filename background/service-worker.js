@@ -817,52 +817,65 @@ class BetterTabsAI {
       cacheStats: this.cacheManager.getStats()
     };
 
-    // Process in batches for better concurrency (use setting)
-    const BATCH_SIZE = this.settings.maxConcurrentAnalysis || 5;
-    for (let i = 0; i < tabs.length; i += BATCH_SIZE) {
-      const batch = tabs.slice(i, Math.min(i + BATCH_SIZE, tabs.length));
+    // Use concurrent queue - maintain N concurrent tasks, add new one as each completes
+    const MAX_CONCURRENT = this.settings.maxConcurrentAnalysis || 5;
+    const queue = [...tabs]; // Copy array
+    const inProgress = new Set();
+    let completed = 0;
 
-      // Analyze batch concurrently with timeout
-      const batchPromises = batch.map(async (tab) => {
-        try {
-          // Add 30 second timeout per tab
-          const analysisPromise = this.analyzeTab(tab.id, tab);
-          const timeoutPromise = new Promise((_, reject) =>
-            setTimeout(() => reject(new Error('Analysis timeout')), 30000)
-          );
+    const analyzeWithTimeout = async (tab) => {
+      try {
+        const analysisPromise = this.analyzeTab(tab.id, tab);
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Analysis timeout')), 30000)
+        );
 
-          const analysis = await Promise.race([analysisPromise, timeoutPromise]);
+        const analysis = await Promise.race([analysisPromise, timeoutPromise]);
 
-          if (analysis && !analysis.error && !analysis.fallback) {
-            return {
-              tabId: tab.id,
-              ...analysis
-            };
-          }
-          return null;
-        } catch (error) {
-          if (error.message === 'Analysis timeout') {
-            console.warn(`⏱️ Timeout analyzing tab ${tab.id}: ${tab.title}`);
-          } else {
-            console.error(`Error analyzing tab ${tab.id}:`, error);
-          }
-          return null;
+        if (analysis && !analysis.error && !analysis.fallback) {
+          return {
+            tabId: tab.id,
+            ...analysis
+          };
         }
-      });
-
-      const batchResults = await Promise.all(batchPromises);
-
-      // Add successful analyses
-      batchResults.forEach(result => {
-        if (result) {
-          results.analyses.push(result);
+        return null;
+      } catch (error) {
+        if (error.message === 'Analysis timeout') {
+          console.warn(`⏱️ Timeout analyzing tab ${tab.id}: ${tab.title}`);
+        } else {
+          console.error(`Error analyzing tab ${tab.id}:`, error);
         }
-      });
+        return null;
+      }
+    };
 
-      // Update progress
-      this.analysisProgress.current = Math.min(i + BATCH_SIZE, tabs.length);
-      console.log(`Progress: ${this.analysisProgress.current}/${this.analysisProgress.total}`);
-    }
+    const processNext = async () => {
+      while (queue.length > 0 || inProgress.size > 0) {
+        // Fill up to MAX_CONCURRENT tasks
+        while (queue.length > 0 && inProgress.size < MAX_CONCURRENT) {
+          const tab = queue.shift();
+          const promise = analyzeWithTimeout(tab).then(result => {
+            inProgress.delete(promise);
+            completed++;
+            this.analysisProgress.current = completed;
+            console.log(`Progress: ${completed}/${this.analysisProgress.total}`);
+
+            if (result) {
+              results.analyses.push(result);
+            }
+            return result;
+          });
+          inProgress.add(promise);
+        }
+
+        // Wait for at least one to complete before continuing
+        if (inProgress.size > 0) {
+          await Promise.race(inProgress);
+        }
+      }
+    };
+
+    await processNext();
 
     // Generate grouping suggestions
     if (results.analyses.length > 0) {
