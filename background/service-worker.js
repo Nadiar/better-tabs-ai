@@ -817,8 +817,8 @@ class BetterTabsAI {
       cacheStats: this.cacheManager.getStats()
     };
 
-    // Process in batches of 5 for better concurrency
-    const BATCH_SIZE = 5;
+    // Process in batches for better concurrency (use setting)
+    const BATCH_SIZE = this.settings.maxConcurrentAnalysis || 5;
     for (let i = 0; i < tabs.length; i += BATCH_SIZE) {
       const batch = tabs.slice(i, Math.min(i + BATCH_SIZE, tabs.length));
 
@@ -1324,99 +1324,75 @@ Provide a JSON response with this exact structure:
         await this.createAISession();
       }
 
-      console.log('📊 Suggesting groups from', analyses.length, 'analyses');
+      console.log('📊 Suggesting groups from', analyses.length, 'analyses using AI');
 
-      // PHASE B: Detect patterns before grouping
-      const tabs = analyses.map(a => ({
+      // Prepare tab summaries for AI (focus on content, not domains)
+      const tabSummaries = analyses.map(a => ({
         id: a.tabId,
         title: a.title,
-        url: a.url,
-        domain: a.domain
+        category: a.category,
+        subcategory: a.subcategory,
+        summary: a.summary,
+        confidence: a.confidence
       }));
-      const patterns = PatternDetector.detectPatterns(tabs);
-      console.log('🔍 Detected patterns:', {
-        domainGroups: patterns.domainGroups.length,
-        subdomainGroups: patterns.subdomainGroups.length,
-        toolEcosystems: patterns.toolEcosystems.length,
-        keywordMatches: patterns.keywordMatches.length
-      });
 
-      // Boost confidence for tabs with strong patterns
-      analyses.forEach(analysis => {
-        const tab = tabs.find(t => t.id === analysis.tabId);
-        if (tab) {
-          const boost = PatternDetector.calculatePatternBoost(tab, patterns);
-          if (boost > 0) {
-            analysis.confidence = Math.min((analysis.confidence || 0.5) + boost, 1.0);
-            console.log(`  ⬆️ Boosted confidence for "${analysis.title}" by ${boost.toFixed(2)}`);
-          }
-        }
-      });
+      // Ask AI to suggest groupings based on semantic similarity
+      const groupingPrompt = `You are analyzing browser tabs to suggest logical groupings. Focus on CONTENT and PURPOSE, not domain names.
 
-      // Get existing tab groups to check for matches
+Here are the tabs:
+${tabSummaries.map((t, i) => `${i + 1}. "${t.title}" - ${t.category}${t.subcategory ? ' > ' + t.subcategory : ''}: ${t.summary}`).join('\n')}
+
+Suggest 2-${this.settings.maxSuggestions} meaningful groups based on:
+- Shared topics/purposes (e.g., "Real Estate Search", "Woodworking Projects", "Social Media")
+- Work context (e.g., "Shopping", "Research", "Development")
+- Related activities (NOT just same domain)
+
+AVOID generic names like "Www Tabs", "Domain Tabs", "Tools" - be specific about the PURPOSE.
+Each group must have 2+ tabs. Tabs can only be in ONE group.
+
+Return JSON array:
+[
+  {
+    "groupName": "specific descriptive name",
+    "reason": "why these tabs belong together",
+    "tabIndices": [1, 3, 5],
+    "confidence": 0.8
+  }
+]`;
+
+      console.log('🤖 Asking AI to suggest groups...');
+      const aiResponse = await this.aiSession.prompt(groupingPrompt);
+      const groupSuggestions = this.extractJSON(aiResponse);
+
+      if (!groupSuggestions || !Array.isArray(groupSuggestions)) {
+        console.warn('AI did not return valid group suggestions, falling back to category grouping');
+        return this.fallbackCategoryGrouping(analyses);
+      }
+
+      console.log(`🎯 AI suggested ${groupSuggestions.length} groups`);
+
+      // Convert AI suggestions to our format
+      const suggestions = groupSuggestions.map(g => {
+        const tabs = (g.tabIndices || [])
+          .map(idx => tabSummaries[idx - 1]) // Convert 1-based to 0-based
+          .map(ts => analyses.find(a => a.tabId === ts.id))
+          .filter(Boolean);
+
+        return {
+          groupName: g.groupName,
+          color: this.getCategoryColor(g.groupName),
+          tabs: tabs,
+          confidence: g.confidence || 0.7,
+          reason: g.reason
+        };
+      }).filter(s => s.tabs.length >= 2); // Remove groups with <2 tabs
+
+      console.log(`✅ Generated ${suggestions.length} AI-suggested groups`);
+
+      // Get existing groups for debugging
       const existingGroups = await this.getExistingGroupInfo();
-      console.log('📁 Found', existingGroups.length, 'existing groups:', existingGroups.map(g => g.title).join(', '));
 
-      // First, check if patterns suggest immediate groupings
-      const patternSuggestions = this.createSuggestionsFromPatterns(patterns, analyses);
-      console.log('🎯 Pattern-based suggestions:', patternSuggestions.length);
-
-      // Then, group by exact category match
-      const exactGroups = {};
-      analyses.forEach(analysis => {
-        const category = analysis.category || 'Uncategorized';
-        if (!exactGroups[category]) {
-          exactGroups[category] = [];
-        }
-        exactGroups[category].push(analysis);
-        console.log('  -', analysis.title, '→', category);
-      });
-
-      console.log('📋 Category groups:', Object.entries(exactGroups).map(([cat, tabs]) => `${cat} (${tabs.length})`).join(', '));
-
-      const suggestions = [];
-
-      // Add pattern-based suggestions first (highest confidence)
-      if (patternSuggestions.length > 0) {
-        console.log('🎯 Adding', patternSuggestions.length, 'pattern-based suggestions');
-        suggestions.push(...patternSuggestions);
-      }
-
-      // Check for tabs that could be added to existing groups
-      const addToGroupSuggestions = await this.suggestAddToExistingGroups(analyses, existingGroups);
-      if (addToGroupSuggestions.length > 0) {
-        console.log('➕ Found', addToGroupSuggestions.length, 'tabs to add to existing groups');
-        suggestions.push(...addToGroupSuggestions);
-      }
-
-      // Process each exact category group
-      for (const [category, tabs] of Object.entries(exactGroups)) {
-        console.log(`  Processing category "${category}" with ${tabs.length} tabs`);
-        if (tabs.length >= 2) {
-          // For larger groups, try to create subcategories based on domains or keywords
-          if (tabs.length >= 4) {
-            const subGroups = this.createSubGroups(tabs, category);
-            console.log(`    Created ${subGroups.length} subgroups`);
-            suggestions.push(...subGroups);
-          } else {
-            // Smaller groups keep the main category
-            const suggestion = {
-              groupName: category,
-              color: this.getCategoryColor(category),
-              tabs: tabs,
-              confidence: tabs.reduce((sum, tab) => sum + (tab.confidence || 0), 0) / tabs.length
-            };
-            console.log(`    Created suggestion: "${category}" with ${tabs.length} tabs`);
-            suggestions.push(suggestion);
-          }
-        } else {
-          console.log(`    Skipped (only ${tabs.length} tab, need 2+)`);
-        }
-      }
-
-      console.log(`✅ Generated ${suggestions.length} total suggestions (before filtering)`);
-
-      // PHASE D: Filter by minimum confidence threshold and minimum tab count
+      // Filter by minimum confidence threshold
       const filtered = suggestions.filter(s =>
         s.confidence >= this.settings.minConfidenceThreshold &&
         s.tabs &&
@@ -1530,6 +1506,36 @@ Provide a JSON response with this exact structure:
     });
 
     return suggestions;
+  }
+
+  fallbackCategoryGrouping(analyses) {
+    // Simple fallback: group by category
+    console.log('📋 Using fallback category grouping');
+    const categoryGroups = {};
+    analyses.forEach(a => {
+      const cat = a.category || 'Uncategorized';
+      if (!categoryGroups[cat]) categoryGroups[cat] = [];
+      categoryGroups[cat].push(a);
+    });
+
+    const suggestions = Object.entries(categoryGroups)
+      .filter(([_, tabs]) => tabs.length >= 2)
+      .map(([category, tabs]) => ({
+        groupName: category,
+        color: this.getCategoryColor(category),
+        tabs: tabs,
+        confidence: tabs.reduce((sum, t) => sum + (t.confidence || 0.5), 0) / tabs.length
+      }));
+
+    return {
+      suggestions: suggestions.slice(0, this.settings.maxSuggestions).map(s => ({
+        groupName: s.groupName,
+        color: s.color,
+        confidence: s.confidence,
+        tabIds: s.tabs.map(t => t.tabId)
+      })),
+      existingGroups: []
+    };
   }
 
   deduplicateSuggestions(suggestions) {

@@ -543,6 +543,7 @@ function App() {
 
   const analyzeTabs = async () => {
     setIsAnalyzing(true);
+    setSuggestions(null); // Clear old suggestions when starting new analysis
 
     try {
       // Use shared AIOperations
