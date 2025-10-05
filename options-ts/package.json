@@ -1,0 +1,16 @@
+{
+  "name": "better-tabs-ai-options",
+  "version": "2.2.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.270",
+    "@types/node": "^20.11.24",
+    "typescript": "^5.2.2",
+    "vite": "^5.2.0"
+  }
+}

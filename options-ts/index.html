@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Better Tabs AI - Settings</title>
+    <link rel="stylesheet" href="options.css">
+</head>
+<body>
+    <div class="settings-container">
+        <header class="settings-header">
+            <img src="../icons/icon48.png" alt="Better Tabs AI">
+            <h1>Better Tabs AI Settings</h1>
+        </header>
+
+        <main class="settings-content">
+            <!-- AI Analysis Settings -->
+            <section class="settings-section">
+                <h2>🤖 AI Analysis</h2>
+                <p class="section-description">Control how aggressive the AI is at finding grouping suggestions</p>
+
+                <div class="setting-item">
+                    <label for="minConfidenceThreshold">
+                        <strong>Minimum Confidence Threshold</strong>
+                        <span class="setting-description">Only show suggestions above this confidence level</span>
+                    </label>
+                    <div class="slider-container">
+                        <input type="range" id="minConfidenceThreshold"
+                               min="0.4" max="0.9" step="0.1" value="0.5">
+                        <div class="slider-labels">
+                            <span class="value-display" id="confidenceValue">0.5</span>
+                            <span class="slider-hint" id="confidenceHint">Moderate</span>
+                        </div>
+                    </div>
+                    <div class="range-labels">
+                        <span>0.4 - More suggestions (aggressive)</span>
+                        <span>0.9 - Fewer suggestions (conservative)</span>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <label for="maxSuggestions">
+                        <strong>Maximum Suggestions</strong>
+                        <span class="setting-description">Limit the number of grouping suggestions shown</span>
+                    </label>
+                    <div class="number-input">
+                        <input type="number" id="maxSuggestions" min="3" max="20" value="10">
+                        <span class="unit">suggestions</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- UI Preferences -->
+            <section class="settings-section">
+                <h2>🎨 User Interface</h2>
+
+                <div class="setting-item">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="showConfidenceScores" checked>
+                        <span>
+                            <strong>Show Confidence Scores</strong>
+                            <span class="setting-description">Display percentage confidence for each suggestion</span>
+                        </span>
+                    </label>
+                </div>
+
+                <div class="setting-item">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="showInlineSuggestions" checked>
+                        <span>
+                            <strong>Show Inline Suggestions</strong>
+                            <span class="setting-description">Display AI suggestions in the full interface</span>
+                        </span>
+                    </label>
+                </div>
+
+                <div class="setting-item">
+                    <label for="defaultGroupColor">
+                        <strong>Default Group Color</strong>
+                        <span class="setting-description">Color for newly created groups</span>
+                    </label>
+                    <select id="defaultGroupColor">
+                        <option value="grey">Grey</option>
+                        <option value="blue">Blue</option>
+                        <option value="red">Red</option>
+                        <option value="yellow">Yellow</option>
+                        <option value="green">Green</option>
+                        <option value="pink">Pink</option>
+                        <option value="purple">Purple</option>
+                        <option value="cyan">Cyan</option>
+                    </select>
+                </div>
+            </section>
+
+            <!-- Performance Settings -->
+            <section class="settings-section">
+                <h2>⚡ Performance</h2>
+
+                <div class="setting-item">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="enableContentAnalysis" checked>
+                        <span>
+                            <strong>Enable Content Analysis</strong>
+                            <span class="setting-description">Analyze page content (slower but more accurate)</span>
+                        </span>
+                    </label>
+                </div>
+
+                <div class="setting-item">
+                    <label for="maxConcurrentAnalysis">
+                        <strong>Concurrent Analysis Limit</strong>
+                        <span class="setting-description">Maximum tabs to analyze simultaneously</span>
+                    </label>
+                    <div class="number-input">
+                        <input type="number" id="maxConcurrentAnalysis" min="5" max="20" value="10">
+                        <span class="unit">tabs</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Status Display -->
+            <section class="settings-section status-section">
+                <h2>📊 Current Status</h2>
+                <div id="statusDisplay" class="status-display">
+                    <p>Loading current settings...</p>
+                </div>
+            </section>
+        </main>
+
+        <footer class="settings-footer">
+            <button id="resetBtn" class="secondary-btn">
+                🔄 Reset to Defaults
+            </button>
+            <div class="footer-actions">
+                <button id="cancelBtn" class="secondary-btn">
+                    Cancel
+                </button>
+                <button id="saveBtn" class="primary-btn">
+                    💾 Save Settings
+                </button>
+            </div>
+        </footer>
+    </div>
+
+    <div id="toast" class="toast"></div>
+
+    <script type="module" src="/src/options.ts"></script>
+</body>
+</html>
