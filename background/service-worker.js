@@ -763,6 +763,7 @@ class BetterTabsAI {
           if (!tabCountChanged && stored.lastAnalysisResults && stored.lastAnalysisResults.analyses) {
             console.log('✅ Using cached analysis results (age:', Math.round(age / 1000), 'seconds, tab count unchanged)');
             return {
+              success: true,
               ...stored.lastAnalysisResults,
               cached: true,
               cacheAge: age,
