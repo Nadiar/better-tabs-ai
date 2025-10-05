@@ -1084,9 +1084,17 @@ Provide a JSON response with this exact structure:
     }
 
     // First try to extract from markdown code blocks
-    const codeBlockMatch = text.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
+    const codeBlockMatch = text.match(/```(?:json)?\s*\n?([\s\S]*?)(?:\n?```|$)/);
     if (codeBlockMatch) {
-      const jsonText = codeBlockMatch[1].trim();
+      let jsonText = codeBlockMatch[1].trim();
+
+      // If JSON appears incomplete (missing closing brace), try to complete it
+      const openBraces = (jsonText.match(/\{/g) || []).length;
+      const closeBraces = (jsonText.match(/\}/g) || []).length;
+      if (openBraces > closeBraces) {
+        jsonText += '\n}'.repeat(openBraces - closeBraces);
+      }
+
       if (jsonText.length > 0) {
         try {
           return JSON.parse(jsonText);
