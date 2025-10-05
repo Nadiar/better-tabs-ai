@@ -65,12 +65,12 @@ web-ext-artifacts/
 !README.md
 !CHANGELOG.md
 !DEVELOPMENT.md
-!STATUS.md
 
 # Refactor planning documents (temporary working files)
 REFACTOR_PLAN.md
 REFACTOR_DECISIONS.md
 TEST_RESULTS.md
+STATUS.md
 
 # Claude AI and development files
 CLAUDE.md
