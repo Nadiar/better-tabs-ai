@@ -38,6 +38,13 @@ function GroupsColumn({ groups, tabs, suggestions, duplicateTabs = [] }) {
   }, [groups, suggestions]);
 
   const handleCreateSuggestion = useCallback((suggestion, index) => {
+    if (!suggestion.tabIds || suggestion.tabIds.length === 0) {
+      console.warn('Cannot create group: no tabIds in suggestion', suggestion);
+      return;
+    }
+
+    console.log('Creating group from suggestion:', suggestion);
+
     updateStaged((draft) => {
       // Generate new group ID
       const newGroupId = Math.min(...draft.groups.map(g => g.id), -1) - 1;
@@ -52,12 +59,16 @@ function GroupsColumn({ groups, tabs, suggestions, duplicateTabs = [] }) {
       draft.groups.push(newGroup);
 
       // Move suggested tabs to new group
+      let movedCount = 0;
       suggestion.tabIds.forEach(tabId => {
         const tab = draft.tabs.find(t => t.id === tabId);
         if (tab) {
           tab.groupId = newGroupId;
+          movedCount++;
         }
       });
+
+      console.log(`Moved ${movedCount} tabs to new group "${suggestion.groupName}"`);
     });
 
     // Remove suggestion from list

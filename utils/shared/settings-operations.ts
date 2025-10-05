@@ -28,7 +28,7 @@ export const SettingsOperations = {
         action: 'getSettings',
       });
 
-      return { success: true, data: response };
+      return { success: true, data: response.settings };
     } catch (error) {
       return {
         success: false,

@@ -13,7 +13,7 @@ import ProgressBar from './ProgressBar';
 
 // Layout Component - Main 3-column layout with drag & drop
 function Layout() {
-  const { stagedState, hasChanges, showConflictBanner, isApplying, isAnalyzing, analysisProgress, applyProgress, toasts, suggestions, searchTerm, duplicateTabs, undoRedo, resetToOriginal, applyChanges, analyzeTabs, refreshFromChrome, updateStaged, dismissConflictBanner, handleSearchChange } = useStagedStateContext();
+  const { stagedState, hasChanges, showConflictBanner, isApplying, isAnalyzing, analysisProgress, applyProgress, toasts, suggestions, searchTerm, duplicateTabs, undoRedo, resetToOriginal, applyChanges, analyzeTabs, clearCache, copyDebugInfo, refreshFromChrome, updateStaged, dismissConflictBanner, handleSearchChange } = useStagedStateContext();
   const [activeTab, setActiveTab] = useState(null);
 
   // Filter tabs based on search term
@@ -203,6 +203,8 @@ function Layout() {
           analysisProgress={analysisProgress}
           onSearchChange={handleSearchChange}
           undoRedo={undoRedo}
+          onClearCache={clearCache}
+          onCopyDebug={copyDebugInfo}
         />
 
         {showConflictBanner && (

@@ -3,7 +3,17 @@ import React from 'react';
 
 // Suggested Group - Displays an AI-generated grouping suggestion
 function SuggestedGroup({ suggestion, tabs, onCreate, onDismiss }) {
-  const suggestedTabs = tabs.filter(tab => suggestion.tabIds.includes(tab.id));
+  console.log('SuggestedGroup rendering:', {
+    suggestionName: suggestion.groupName,
+    tabIds: suggestion.tabIds,
+    totalTabs: tabs.length,
+    tabIdsType: typeof suggestion.tabIds,
+    isArray: Array.isArray(suggestion.tabIds)
+  });
+
+  const suggestedTabs = tabs.filter(tab => suggestion.tabIds?.includes(tab.id));
+
+  console.log('Filtered suggestedTabs:', suggestedTabs.length, 'tabs');
 
   const getGroupColor = (color) => {
     const colors = {

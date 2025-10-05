@@ -587,7 +587,7 @@ class BetterTabsAI {
         case 'resetSettings':
           this.settings = { ...DEFAULT_SETTINGS };
           await chrome.storage.sync.remove('betterTabsSettings');
-          sendResponse({ settings: this.settings });
+          sendResponse({ success: true, settings: this.settings });
           break;
 
         default:
@@ -1373,9 +1373,13 @@ Provide a JSON response with this exact structure:
 
       console.log(`✅ Generated ${suggestions.length} total suggestions (before filtering)`);
 
-      // PHASE D: Filter by minimum confidence threshold
-      const filtered = suggestions.filter(s => s.confidence >= this.settings.minConfidenceThreshold);
-      console.log(`🎯 Filtered to ${filtered.length} suggestions (threshold: ${this.settings.minConfidenceThreshold})`);
+      // PHASE D: Filter by minimum confidence threshold and minimum tab count
+      const filtered = suggestions.filter(s =>
+        s.confidence >= this.settings.minConfidenceThreshold &&
+        s.tabs &&
+        s.tabs.length >= 2
+      );
+      console.log(`🎯 Filtered to ${filtered.length} suggestions (threshold: ${this.settings.minConfidenceThreshold}, min 2 tabs)`);
 
       // Sort by confidence and tab count
       filtered.sort((a, b) => {
@@ -1388,9 +1392,33 @@ Provide a JSON response with this exact structure:
       const limited = filtered.slice(0, this.settings.maxSuggestions);
       console.log(`📋 Returning ${limited.length} suggestions (max: ${this.settings.maxSuggestions})`);
 
+      // Transform suggestions to use tabIds instead of tabs array
+      const transformed = limited.map(s => {
+        // Analysis objects have 'tabId' property, not 'id'
+        const tabIds = (s.tabs || []).map(t => t.tabId || t.id).filter(Boolean);
+        console.log(`Transforming suggestion "${s.groupName}":`, {
+          originalTabs: s.tabs?.length || 0,
+          tabIds: tabIds,
+          tabIdsLength: tabIds.length
+        });
+        return {
+          groupName: s.groupName,
+          color: s.color,
+          confidence: s.confidence,
+          tabIds: tabIds,
+          isAddToExisting: s.isAddToExisting,
+          existingGroupId: s.existingGroupId
+        };
+      }).filter(s => s.tabIds && s.tabIds.length > 0);
+
+      console.log('Final transformed suggestions:', transformed.map(s => ({
+        name: s.groupName,
+        tabIds: s.tabIds
+      })));
+
       // Return both suggestions and existing groups info for debugging
       return {
-        suggestions: limited,
+        suggestions: transformed,
         existingGroups: existingGroups.map(g => ({
           title: g.title,
           tabCount: g.tabCount

@@ -1,10 +1,10 @@
 // Better Tabs AI - Settings Page (TypeScript)
+import './options.css';
 import {
   SettingsOperations,
   NotificationManager,
   type Settings,
 } from '@shared';
-import './options.css';
 
 let currentSettings: Settings | null = null;
 
