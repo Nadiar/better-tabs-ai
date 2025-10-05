@@ -99,7 +99,12 @@ export const ChromeAPI = {
    */
   async closeTabs(tabIds: number[]): Promise<Result<{ closed: number[] }>> {
     try {
-      await chrome.tabs.remove(tabIds);
+      if (tabIds.length === 0) {
+        return { success: true, data: { closed: [] } };
+      }
+
+      // Chrome API requires non-empty array
+      await chrome.tabs.remove(tabIds as any);
       return { success: true, data: { closed: tabIds } };
     } catch (error) {
       return {
@@ -159,8 +164,28 @@ export const ChromeAPI = {
     color: ChromeColor = 'grey'
   ): Promise<Result<GroupData>> {
     try {
-      // First, group the tabs
-      const groupId = await chrome.tabs.group({ tabIds });
+      if (tabIds.length === 0) {
+        return {
+          success: false,
+          error: {
+            message: 'Cannot create group with no tabs',
+            code: 'CREATE_GROUP_FAILED',
+          },
+        };
+      }
+
+      // First, group the tabs - Chrome API requires non-empty array
+      const groupId = await chrome.tabs.group({
+        tabIds: tabIds[0] as number | [number, ...number[]]
+      });
+
+      // Add remaining tabs if any
+      if (tabIds.length > 1) {
+        await chrome.tabs.group({
+          groupId,
+          tabIds: tabIds.slice(1) as number | [number, ...number[]]
+        });
+      }
 
       // Then update the group properties
       const group = await chrome.tabGroups.update(groupId, {
@@ -219,7 +244,15 @@ export const ChromeAPI = {
     groupId: number
   ): Promise<Result<{ groupId: number; tabIds: number[] }>> {
     try {
-      await chrome.tabs.group({ tabIds, groupId });
+      if (tabIds.length === 0) {
+        return { success: true, data: { groupId, tabIds: [] } };
+      }
+
+      // Chrome API requires non-empty array
+      await chrome.tabs.group({
+        groupId,
+        tabIds: tabIds as any // Type assertion to handle Chrome API requirements
+      });
       return { success: true, data: { groupId, tabIds } };
     } catch (error) {
       return {
@@ -241,7 +274,12 @@ export const ChromeAPI = {
    */
   async ungroupTabs(tabIds: number[]): Promise<Result<{ ungrouped: number[] }>> {
     try {
-      await chrome.tabs.ungroup(tabIds);
+      if (tabIds.length === 0) {
+        return { success: true, data: { ungrouped: [] } };
+      }
+
+      // Chrome API requires non-empty array
+      await chrome.tabs.ungroup(tabIds as any);
       return { success: true, data: { ungrouped: tabIds } };
     } catch (error) {
       return {
@@ -269,7 +307,7 @@ export const ChromeAPI = {
 
       // Ungroup all tabs
       if (tabIds.length > 0) {
-        await chrome.tabs.ungroup(tabIds);
+        await chrome.tabs.ungroup(tabIds as any);
       }
 
       return { success: true, data: { deleted: groupId } };

@@ -38,7 +38,7 @@ export const getGroupsHandler = http.get(
 export const createGroupHandler = http.post(
   'chrome-extension://*/tabGroups/create',
   async ({ request }) => {
-    const body = await request.json();
+    const body = await request.json() as { title?: string; color?: string };
     const newGroup = {
       id: Math.floor(Math.random() * 10000),
       title: body.title || 'New Group',
@@ -56,7 +56,7 @@ export const createGroupHandler = http.post(
 export const groupTabsHandler = http.post(
   'chrome-extension://*/tabs/group',
   async ({ request }) => {
-    const body = await request.json();
+    const body = await request.json() as { groupId: number; tabIds: number[] };
     return HttpResponse.json({
       success: true,
       groupId: body.groupId,
@@ -72,7 +72,7 @@ export const groupTabsHandler = http.post(
 export const ungroupTabsHandler = http.post(
   'chrome-extension://*/tabs/ungroup',
   async ({ request }) => {
-    const body = await request.json();
+    const body = await request.json() as { tabIds: number[] };
     return HttpResponse.json({
       success: true,
       tabIds: body.tabIds,
@@ -87,10 +87,10 @@ export const ungroupTabsHandler = http.post(
 export const updateGroupHandler = http.patch(
   'chrome-extension://*/tabGroups/:groupId',
   async ({ request, params }) => {
-    const body = await request.json();
+    const body = await request.json() as { title?: string; color?: string; collapsed?: boolean };
     return HttpResponse.json({
       id: params.groupId,
-      ...body,
+      ...(body as object),
     });
   }
 );
@@ -102,7 +102,7 @@ export const updateGroupHandler = http.patch(
 export const closeTabsHandler = http.delete(
   'chrome-extension://*/tabs/remove',
   async ({ request }) => {
-    const body = await request.json();
+    const body = await request.json() as { tabIds: number[] };
     return HttpResponse.json({
       success: true,
       removedTabIds: body.tabIds,
