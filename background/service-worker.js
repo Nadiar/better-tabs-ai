@@ -665,7 +665,7 @@ class BetterTabsAI {
     }
   }
 
-  isTabGroupable(tab) {
+  async isTabGroupable(tab) {
     // Filter out tabs that shouldn't be grouped
     const url = tab.url || '';
     const title = tab.title || '';
@@ -702,6 +702,18 @@ class BetterTabsAI {
       return false;
     }
 
+    // Skip PWA apps (tabs in single-tab windows)
+    if (tab.windowId) {
+      try {
+        const window = await chrome.windows.get(tab.windowId, { populate: true });
+        if (window.tabs && window.tabs.length === 1) {
+          return false; // Single-tab window = likely PWA
+        }
+      } catch (e) {
+        // Window might have closed, continue
+      }
+    }
+
     return true;
   }
 
@@ -722,8 +734,11 @@ class BetterTabsAI {
       // Get all tabs
       const tabs = await chrome.tabs.query({});
 
-      // Filter to only groupable tabs
-      const groupableTabs = tabs.filter(tab => this.isTabGroupable(tab));
+      // Filter to only groupable tabs (async filter)
+      const groupableResults = await Promise.all(
+        tabs.map(async tab => ({ tab, groupable: await this.isTabGroupable(tab) }))
+      );
+      const groupableTabs = groupableResults.filter(r => r.groupable).map(r => r.tab);
       console.log(`Found ${groupableTabs.length} groupable tabs (filtered from ${tabs.length} total)`);
 
       if (groupableTabs.length === 0) {
