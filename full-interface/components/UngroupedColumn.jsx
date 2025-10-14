@@ -4,7 +4,7 @@ import TabCard from './TabCard';
 
 
 // Ungrouped Tabs Column - Droppable area for ungrouped tabs
-function UngroupedColumn({ tabs, duplicateTabs, suggestions }) {
+function UngroupedColumn({ tabs, duplicateTabs, suggestions, onFindGroup, selectedTabs, onSelectTab }) {
   // Memoize filtered tabs to avoid recalculating on every render
   const ungroupedTabs = useMemo(() => {
     // Get all tab IDs that are in suggestions
@@ -43,6 +43,9 @@ function UngroupedColumn({ tabs, duplicateTabs, suggestions }) {
               key={tab.id}
               tab={tab}
               isDuplicate={duplicateTabs.includes(tab.id)}
+              onFindGroup={onFindGroup}
+              isSelected={selectedTabs && selectedTabs.includes(tab.id)}
+              onSelect={onSelectTab}
             />
           ))
         )}

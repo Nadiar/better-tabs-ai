@@ -112,7 +112,9 @@ export interface AnalysisProgress {
 export interface Settings {
   // AI Analysis
   minConfidenceThreshold: number;
+  minTabConfidence: number;
   maxSuggestions: number;
+  customAIPromptRules?: string;
 
   // UI Preferences
   showConfidenceScores: boolean;
@@ -120,7 +122,7 @@ export interface Settings {
   defaultGroupColor: ChromeColor;
   showAdvancedOptions: boolean;
 
-  // Performance
+  // Performance (deprecated but kept for compatibility)
   enableContentAnalysis: boolean;
   maxConcurrentAnalysis: number;
   cacheDuration?: number;
@@ -131,6 +133,7 @@ export interface Settings {
  */
 export const DEFAULT_SETTINGS: Settings = {
   minConfidenceThreshold: 0.5,
+  minTabConfidence: 0.5,
   maxSuggestions: 10,
   showConfidenceScores: true,
   showInlineSuggestions: true,

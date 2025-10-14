@@ -13,7 +13,7 @@ import ProgressBar from './ProgressBar';
 
 // Layout Component - Main 3-column layout with drag & drop
 function Layout() {
-  const { stagedState, hasChanges, showConflictBanner, isApplying, isAnalyzing, analysisProgress, applyProgress, toasts, suggestions, searchTerm, duplicateTabs, showAdvancedOptions, undoRedo, resetToOriginal, applyChanges, analyzeTabs, clearCache, copyDebugInfo, refreshFromChrome, updateStaged, dismissConflictBanner, handleSearchChange } = useStagedStateContext();
+  const { stagedState, hasChanges, showConflictBanner, isApplying, isAnalyzing, analysisProgress, applyProgress, toasts, suggestions, searchTerm, duplicateTabs, showAdvancedOptions, selectedTabs, undoRedo, resetToOriginal, applyChanges, analyzeTabs, clearCache, copyDebugInfo, refreshFromChrome, updateStaged, dismissConflictBanner, handleSearchChange, handleSelectTab, handleFindGroup } = useStagedStateContext();
   const [activeTab, setActiveTab] = useState(null);
 
   // Filter tabs based on search term
@@ -175,10 +175,10 @@ function Layout() {
 
   // Memoize columns to prevent unnecessary re-renders during drag
   const memoizedColumns = useMemo(() => ({
-    ungrouped: <UngroupedColumn tabs={filteredTabs} duplicateTabs={duplicateTabs} suggestions={suggestions} />,
+    ungrouped: <UngroupedColumn tabs={filteredTabs} duplicateTabs={duplicateTabs} suggestions={suggestions} onFindGroup={handleFindGroup} selectedTabs={selectedTabs} onSelectTab={handleSelectTab} />,
     groups: <GroupsColumn groups={stagedState.groups} tabs={filteredTabs} suggestions={suggestions} duplicateTabs={duplicateTabs} />,
     newGroup: <NewGroupBox />
-  }), [filteredTabs, stagedState.groups, suggestions, duplicateTabs]);
+  }), [filteredTabs, stagedState.groups, suggestions, duplicateTabs, handleFindGroup, selectedTabs, handleSelectTab]);
 
   return (
     <DndContext

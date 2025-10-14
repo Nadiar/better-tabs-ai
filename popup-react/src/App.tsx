@@ -376,13 +376,9 @@ function App() {
   };
 
   const clearCache = async () => {
-    const result = await AIOperations.clearCache();
-
-    if (result.success) {
-      showMessage('Cache cleared successfully', 'success');
-    } else {
-      showMessage(result.error.message, 'error');
-    }
+    await AIOperations.clearCache();
+    // Force page reload to clear UI completely
+    window.location.reload();
   };
 
   const copyDebugInfo = async () => {

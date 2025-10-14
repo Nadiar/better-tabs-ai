@@ -4,7 +4,7 @@ import { CSS } from '@dnd-kit/utilities';
 import Tooltip from './Tooltip';
 
 // Tab Card Component - Draggable tab with favicon and title
-function TabCard({ tab, isSelected, isDuplicate, onSelect }) {
+function TabCard({ tab, isSelected, isDuplicate, onSelect, onFindGroup }) {
   const [faviconLoaded, setFaviconLoaded] = useState(false);
   const [faviconError, setFaviconError] = useState(false);
 
@@ -63,6 +63,18 @@ function TabCard({ tab, isSelected, isDuplicate, onSelect }) {
         </div>
         {isDuplicate && (
           <span className="duplicate-badge">Duplicate</span>
+        )}
+        {onFindGroup && (
+          <button
+            className="find-group-btn"
+            onClick={(e) => {
+              e.stopPropagation();
+              onFindGroup(tab.id, e);
+            }}
+            title="Find a group for this tab"
+          >
+            🔍
+          </button>
         )}
       </div>
     </Tooltip>

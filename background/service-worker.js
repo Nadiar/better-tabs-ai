@@ -1,8 +1,64 @@
 // Better Tabs AI - Service Worker
 // Handles AI processing and tab management
 
-// Import cache manager (inline since service workers don't support ES6 imports)
-// Cache Manager - LRU cache with content-based invalidation (no TTL)
+// Removed: CacheManager class - no longer needed with simple hash-based caching
+
+// AI Status enum and error messages
+const AIStatus = {
+  READY: 'ready',
+  DOWNLOADING: 'downloading',
+  DOWNLOAD_REQUIRED: 'download-required',
+  FLAGS_DISABLED: 'flags-disabled',
+  GPU_UNAVAILABLE: 'gpu-unavailable',
+  STORAGE_FULL: 'storage-full',
+  UNSUPPORTED_BROWSER: 'unsupported-browser',
+  UNKNOWN_ERROR: 'unknown-error'
+};
+
+const AIStatusMessages = {
+  [AIStatus.READY]: {
+    short: 'AI Ready',
+    detail: 'Gemini Nano is ready to use',
+    action: null
+  },
+  [AIStatus.DOWNLOADING]: {
+    short: 'Downloading AI Model',
+    detail: 'Gemini Nano model is being downloaded. This may take several minutes.',
+    action: 'Check progress at chrome://on-device-internals'
+  },
+  [AIStatus.DOWNLOAD_REQUIRED]: {
+    short: 'Download Required',
+    detail: 'Gemini Nano model needs to be downloaded (approximately 22GB)',
+    action: 'Visit chrome://on-device-internals to download'
+  },
+  [AIStatus.FLAGS_DISABLED]: {
+    short: 'Chrome Flags Disabled',
+    detail: 'Prompt API for Gemini Nano is not enabled in Chrome flags',
+    action: 'Enable at chrome://flags/#prompt-api-for-gemini-nano'
+  },
+  [AIStatus.GPU_UNAVAILABLE]: {
+    short: 'GPU Not Available',
+    detail: 'Gemini Nano requires at least 4GB GPU memory',
+    action: 'Check system requirements'
+  },
+  [AIStatus.STORAGE_FULL]: {
+    short: 'Insufficient Storage',
+    detail: 'Need at least 22GB free storage for Gemini Nano model',
+    action: 'Free up disk space'
+  },
+  [AIStatus.UNSUPPORTED_BROWSER]: {
+    short: 'Unsupported Browser',
+    detail: 'Requires Chrome 118+ with AI features',
+    action: 'Update Chrome to latest version'
+  },
+  [AIStatus.UNKNOWN_ERROR]: {
+    short: 'Unknown Error',
+    detail: 'Unable to determine AI availability',
+    action: 'Check console for details'
+  }
+};
+
+// CacheManager - LRU cache for tab summaries
 class CacheManager {
   constructor(options = {}) {
     this.maxSize = options.maxSize || 100;
@@ -11,13 +67,8 @@ class CacheManager {
     this.stats = { hits: 0, misses: 0, evictions: 0, invalidations: 0 };
   }
 
-  generateKey(metadata, content = null) {
-    const baseKey = `${metadata.url}_${metadata.title}`;
-    if (content && content.excerpt) {
-      const contentHash = this._simpleHash(content.excerpt.substring(0, 200));
-      return `${baseKey}_${contentHash}`;
-    }
-    return baseKey;
+  generateKey(metadata) {
+    return `${metadata.url}_${metadata.title}`;
   }
 
   get(key) {
@@ -27,8 +78,6 @@ class CacheManager {
       return null;
     }
 
-    // No TTL check - cache is valid until content changes (detected by hash in key)
-    // This allows cache to work indefinitely for unchanged pages
     entry.accessCount++;
     entry.lastAccess = Date.now();
     this._updateAccessOrder(key);
@@ -36,7 +85,7 @@ class CacheManager {
     return entry.value;
   }
 
-  set(key, value, options = {}) {
+  set(key, value) {
     if (this.cache.size >= this.maxSize && !this.cache.has(key)) {
       this._evictLRU();
     }
@@ -45,8 +94,7 @@ class CacheManager {
       value,
       timestamp: Date.now(),
       lastAccess: Date.now(),
-      accessCount: 0,
-      contentHash: options.contentHash || null
+      accessCount: 0
     });
 
     this._updateAccessOrder(key);
@@ -108,221 +156,49 @@ class CacheManager {
       this.accessOrder.splice(index, 1);
     }
   }
-
-  _simpleHash(str) {
-    let hash = 0;
-    for (let i = 0; i < str.length; i++) {
-      const char = str.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
-      hash = hash & hash;
-    }
-    return Math.abs(hash).toString(36);
-  }
 }
 
-// AI Status enum and error messages
-const AIStatus = {
-  READY: 'ready',
-  DOWNLOADING: 'downloading',
-  DOWNLOAD_REQUIRED: 'download-required',
-  FLAGS_DISABLED: 'flags-disabled',
-  GPU_UNAVAILABLE: 'gpu-unavailable',
-  STORAGE_FULL: 'storage-full',
-  UNSUPPORTED_BROWSER: 'unsupported-browser',
-  UNKNOWN_ERROR: 'unknown-error'
-};
-
-const AIStatusMessages = {
-  [AIStatus.READY]: {
-    short: 'AI Ready',
-    detail: 'Gemini Nano is ready to use',
-    action: null
-  },
-  [AIStatus.DOWNLOADING]: {
-    short: 'Downloading AI Model',
-    detail: 'Gemini Nano model is being downloaded. This may take several minutes.',
-    action: 'Check progress at chrome://on-device-internals'
-  },
-  [AIStatus.DOWNLOAD_REQUIRED]: {
-    short: 'Download Required',
-    detail: 'Gemini Nano model needs to be downloaded (approximately 22GB)',
-    action: 'Visit chrome://on-device-internals to download'
-  },
-  [AIStatus.FLAGS_DISABLED]: {
-    short: 'Chrome Flags Disabled',
-    detail: 'Prompt API for Gemini Nano is not enabled in Chrome flags',
-    action: 'Enable at chrome://flags/#prompt-api-for-gemini-nano'
-  },
-  [AIStatus.GPU_UNAVAILABLE]: {
-    short: 'GPU Not Available',
-    detail: 'Gemini Nano requires at least 4GB GPU memory',
-    action: 'Check system requirements'
-  },
-  [AIStatus.STORAGE_FULL]: {
-    short: 'Insufficient Storage',
-    detail: 'Need at least 22GB free storage for Gemini Nano model',
-    action: 'Free up disk space'
-  },
-  [AIStatus.UNSUPPORTED_BROWSER]: {
-    short: 'Unsupported Browser',
-    detail: 'Requires Chrome 118+ with AI features',
-    action: 'Update Chrome to latest version'
-  },
-  [AIStatus.UNKNOWN_ERROR]: {
-    short: 'Unknown Error',
-    detail: 'Unable to determine AI availability',
-    action: 'Check console for details'
-  }
-};
-
-// Pattern Detector - Inline version for service worker
-// Detects relationships between tabs before AI analysis
-const PatternDetector = {
-  detectPatterns(tabs) {
-    return {
-      domainGroups: this.groupBySameDomain(tabs),
-      subdomainGroups: this.groupBySameSubdomain(tabs),
-      toolEcosystems: this.detectToolEcosystems(tabs),
-      keywordMatches: this.detectKeywordMatches(tabs)
-    };
-  },
-
-  groupBySameDomain(tabs) {
-    const groups = {};
-    tabs.forEach(tab => {
-      const domain = this.extractDomain(tab.url);
-      if (!groups[domain]) groups[domain] = [];
-      groups[domain].push(tab);
-    });
-    return Object.entries(groups)
-      .filter(([_, tabList]) => tabList.length >= 2)
-      .map(([domain, tabList]) => ({ type: 'same-domain', domain, tabs: tabList, confidence: 0.9 }));
-  },
-
-  groupBySameSubdomain(tabs) {
-    const groups = {};
-    tabs.forEach(tab => {
-      const subdomain = this.extractSubdomain(tab.url);
-      if (subdomain) {
-        if (!groups[subdomain]) groups[subdomain] = [];
-        groups[subdomain].push(tab);
-      }
-    });
-    return Object.entries(groups)
-      .filter(([_, tabList]) => tabList.length >= 2)
-      .map(([subdomain, tabList]) => ({ type: 'same-subdomain', subdomain, tabs: tabList, confidence: 0.7 }));
-  },
-
-  detectToolEcosystems(tabs) {
-    const ecosystems = {
-      'arr-stack': {
-        keywords: ['radarr', 'sonarr', 'lidarr', 'prowlarr', 'autobrr', 'bazarr'],
-        name: 'Media Server Tools',
-        confidence: 0.95
-      },
-      'google-workspace': {
-        keywords: ['docs.google', 'drive.google', 'mail.google', 'calendar.google', 'sheets.google'],
-        name: 'Google Workspace',
-        confidence: 0.95
-      },
-      'destiny-tools': {
-        keywords: ['destinyitemmanager', 'braytech', 'light.gg', 'd2gunsmith'],
-        name: 'Destiny Tools',
-        confidence: 0.9
-      },
-      'development': {
-        keywords: ['github', 'gitlab', 'stackoverflow', 'code.visualstudio'],
-        name: 'Development Tools',
-        confidence: 0.85
-      }
-    };
-
-    const detected = [];
-    for (const [ecosystemId, ecosystem] of Object.entries(ecosystems)) {
-      const matchingTabs = tabs.filter(tab => {
-        const url = tab.url.toLowerCase();
-        const title = tab.title.toLowerCase();
-        return ecosystem.keywords.some(keyword => url.includes(keyword) || title.includes(keyword));
-      });
-      if (matchingTabs.length >= 2) {
-        detected.push({
-          type: 'tool-ecosystem',
-          ecosystem: ecosystemId,
-          name: ecosystem.name,
-          tabs: matchingTabs,
-          confidence: ecosystem.confidence
-        });
-      }
-    }
-    return detected;
-  },
-
-  detectKeywordMatches(tabs) {
-    // Find tabs with overlapping keywords in title
-    const keywordGroups = new Map();
-    tabs.forEach(tab => {
-      const keywords = this.extractKeywords(tab.title);
-      keywords.forEach(keyword => {
-        if (!keywordGroups.has(keyword)) keywordGroups.set(keyword, []);
-        keywordGroups.get(keyword).push(tab);
-      });
-    });
-
-    return Array.from(keywordGroups.entries())
-      .filter(([_, tabList]) => tabList.length >= 2)
-      .map(([keyword, tabList]) => ({ type: 'keyword-match', keyword, tabs: tabList, confidence: 0.6 }));
-  },
-
-  extractKeywords(title) {
-    if (!title) return [];
-    // Extract meaningful words (3+ chars, not common words)
-    const commonWords = ['the', 'and', 'for', 'with', 'from', 'about', 'this', 'that', 'page'];
-    return title.toLowerCase()
-      .split(/\W+/)
-      .filter(word => word.length >= 3 && !commonWords.includes(word))
-      .slice(0, 5);
-  },
-
-  extractDomain(url) {
-    try {
-      return new URL(url).hostname;
-    } catch {
-      return null;
-    }
-  },
-
-  extractSubdomain(url) {
-    try {
-      const parts = new URL(url).hostname.split('.');
-      return parts.length >= 2 ? parts.slice(-2).join('.') : null;
-    } catch {
-      return null;
-    }
-  },
-
-  calculatePatternBoost(tab, patterns) {
-    let boost = 0;
-    patterns.domainGroups?.forEach(group => {
-      if (group.tabs.some(t => t.id === tab.id)) boost += 0.3;
-    });
-    patterns.toolEcosystems?.forEach(group => {
-      if (group.tabs.some(t => t.id === tab.id)) boost += 0.4;
-    });
-    patterns.keywordMatches?.forEach(group => {
-      if (group.tabs.some(t => t.id === tab.id)) boost += 0.1;
-    });
-    return Math.min(boost, 0.5);
-  }
-};
-
 // Default Settings (Phase E)
+const DEFAULT_AI_PROMPT_RULES = `CRITICAL RULES:
+1. **TOPIC MATCHING**: Tabs MUST be about the SAME specific topic/activity to be grouped
+   - ❌ BAD: "Google Messages" + "Zillow house listings" (completely different purposes)
+   - ✅ GOOD: Multiple Zillow tabs about the same area
+
+2. **MESSAGING APPS EXCEPTION**:
+   - Messages, WhatsApp, Telegram, Discord, Slack → Group ONLY by app name
+   - ❌ DON'T read conversation titles or message content
+   - ✅ Just use app name: "Discord", "Messages", etc.
+
+3. **RESPECT TOPIC BOUNDARIES**:
+   - If there's a "Woodworking" group, ALL woodworking tabs go there
+   - Don't split related tabs across multiple groups
+   - Check ALL tabs before creating a new group for a topic
+
+4. **DOMAIN ≠ TOPIC**:
+   - Same domain doesn't mean same group (Reddit has millions of topics)
+   - Different domains CAN be same group (shopping across multiple stores)
+
+5. **PER-TAB CONFIDENCE** (0.0-1.0):
+   - 0.9-1.0: Perfectly fits the group topic
+   - 0.7-0.8: Strongly related
+   - 0.5-0.6: Somewhat related
+   - <0.5: Probably doesn't belong
+
+Examples:
+✅ GOOD: "Woodworking Projects" = [Woodworking Reddit, DIY table saw tips, Router jig plans]
+❌ BAD: "Home & DIY" = [Messages for Web, House listings, Woodworking]
+✅ GOOD: "Messages" = [All Messages tabs regardless of conversations]
+❌ BAD: "House Hunting Messages" = [Messages + Zillow]`;
+
 const DEFAULT_SETTINGS = {
   // AI Analysis Settings
   aiAggressiveness: 0.6,           // 0.5 (aggressive) - 0.9 (conservative)
-  minConfidenceThreshold: 0.5,     // Minimum confidence to show suggestion (lowered from 0.6)
+  minConfidenceThreshold: 0.5,     // Minimum group confidence to show suggestion
+  minTabConfidence: 0.5,           // Minimum per-tab confidence to include in group
   correlationMode: 'similar',      // 'exact' | 'similar' | 'loose'
   maxSuggestions: 10,              // Maximum suggestions to show
   minTabsForSuggestion: 2,         // Minimum tabs needed to suggest a group
+  customAIPromptRules: DEFAULT_AI_PROMPT_RULES, // Customizable AI prompt rules
 
   // UI Preferences
   showConfidenceScores: true,      // Show percentage in UI
@@ -342,7 +218,7 @@ class BetterTabsAI {
     this.sessionCreated = false;
     this.isAIAvailable = false;
     this.aiStatus = AIStatus.UNKNOWN_ERROR;
-    this.cacheManager = new CacheManager({ maxSize: 100 });
+    this.summaryCache = new CacheManager({ maxSize: 200 }); // Cache for tab summaries
     this.settings = { ...DEFAULT_SETTINGS }; // Initialize with defaults
     this.analysisInProgress = false;
     this.analysisProgress = { current: 0, total: 0, status: 'idle' };
@@ -488,21 +364,7 @@ class BetterTabsAI {
       return true; // Keep message channel open for async responses
     });
 
-    // Listen for tab updates and invalidate cache
-    chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-      if (changeInfo.status === 'complete' && tab.url) {
-        // Tab finished loading - invalidate cache for this URL
-        const invalidated = this.cacheManager.invalidateByUrl(tab.url);
-        if (invalidated > 0) {
-          console.log(`Cache invalidated for ${tab.url}: ${invalidated} entries`);
-        }
-      }
-    });
-
-    // Listen for tab removal to clean up cache
-    chrome.tabs.onRemoved.addListener((tabId, removeInfo) => {
-      // Cache will naturally expire, but we could add cleanup here if needed
-    });
+    // Removed: Tab update/removal cache invalidation - no longer needed with hash-based caching
   }
 
   async handleMessage(message, sender, sendResponse) {
@@ -551,14 +413,15 @@ class BetterTabsAI {
           break;
 
         case 'clearCache':
-          this.cacheManager.clear();
-          await chrome.storage.local.remove(['lastAnalysisResults', 'lastAnalysisTime', 'lastAnalysisTabCount']);
-          console.log('🧹 Analysis cache cleared (including stored results)');
-          sendResponse({ success: true, stats: this.cacheManager.getStats() });
+          await chrome.storage.local.remove(['lastAnalysisResults', 'lastAnalysisTime', 'lastTabsHash']);
+          this.summaryCache.clear();
+          console.log('🧹 Analysis cache and summary cache cleared');
+          sendResponse({ success: true });
           break;
 
-        case 'getCacheStats':
-          sendResponse({ stats: this.cacheManager.getStats() });
+        case 'findGroupForTabs':
+          const findResult = await this.findGroupForTabs(message.tabs, message.groups);
+          sendResponse(findResult);
           break;
 
         case 'getAnalysisProgress':
@@ -571,6 +434,7 @@ class BetterTabsAI {
         case 'getLastAnalysisResults':
           const stored = await chrome.storage.local.get(['lastAnalysisResults', 'lastAnalysisTime']);
           sendResponse({
+            success: true,
             results: stored.lastAnalysisResults || null,
             timestamp: stored.lastAnalysisTime || null
           });
@@ -578,6 +442,10 @@ class BetterTabsAI {
 
         case 'getSettings':
           sendResponse({ settings: this.settings });
+          break;
+
+        case 'getDefaultPromptRules':
+          sendResponse({ success: true, defaultRules: DEFAULT_AI_PROMPT_RULES });
           break;
 
         case 'saveSettings':
@@ -589,6 +457,10 @@ class BetterTabsAI {
           this.settings = { ...DEFAULT_SETTINGS };
           await chrome.storage.sync.remove('betterTabsSettings');
           sendResponse({ success: true, settings: this.settings });
+          break;
+
+        case 'getCacheStats':
+          sendResponse({ success: true, stats: this.summaryCache.getStats() });
           break;
 
         default:
@@ -624,14 +496,16 @@ class BetterTabsAI {
       if (availability === 'readily-available' || availability === 'available') {
         // Try to create a session with proper language specification
         this.aiSession = await aiAPI.create({
-          systemPrompt: `You are a helpful assistant that categorizes and organizes web browser tabs based on their content. 
+          systemPrompt: `You are a helpful assistant that categorizes and organizes web browser tabs based on their content.
           Your job is to:
           1. Analyze tab titles, URLs, and content to understand what each tab is about
           2. Suggest logical groupings based on topics, themes, or purposes
           3. Provide concise, clear category names for groups
           4. Be consistent in your categorization approach
-          
+
           Always respond with valid JSON when requested.`,
+          temperature: 0.7,
+          topK: 3,
           expectedInputs: [{ type: "text", languages: ["en"] }],
           expectedOutputs: [{ type: "text", languages: ["en"] }]
         });
@@ -662,6 +536,135 @@ class BetterTabsAI {
       this.isAIAvailable = false;
       this.aiSession = null;
       throw error;
+    }
+  }
+
+  async generateTabSummary(tab) {
+    // Generate a concise, context-rich summary for a tab
+    // This is cached and used to reduce token usage in grouping prompts
+    const metadata = {
+      title: tab.title || '',
+      url: tab.url || '',
+      domain: this.extractDomain(tab.url),
+      path: this.extractPath(tab.url)
+    };
+
+    // Check cache first
+    const cacheKey = this.summaryCache.generateKey(metadata);
+    const cached = this.summaryCache.get(cacheKey);
+    if (cached) {
+      console.log('✅ Summary cache hit:', metadata.title);
+      return cached;
+    }
+
+    console.log('❌ Summary cache miss, generating:', metadata.title);
+
+    try {
+      if (!this.aiSession) {
+        await this.createAISession();
+      }
+
+      // Try to extract page content (metadata + text excerpt)
+      let pageContent = null;
+      try {
+        const contentResult = await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          func: () => {
+            try {
+              // Get meta description
+              const metaDesc = document.querySelector('meta[name="description"]')?.content ||
+                              document.querySelector('meta[property="og:description"]')?.content || '';
+
+              // Get page headings (h1, h2)
+              const headings = Array.from(document.querySelectorAll('h1, h2'))
+                .map(h => h.textContent?.trim())
+                .filter(text => text && text.length > 0 && text.length < 100)
+                .slice(0, 5);
+
+              // Get first 300 characters of visible text content
+              const textContent = document.body?.innerText || '';
+              const excerpt = textContent.substring(0, 300).replace(/\s+/g, ' ').trim();
+
+              return {
+                description: metaDesc,
+                headings: headings,
+                excerpt: excerpt
+              };
+            } catch (error) {
+              return { error: error.message };
+            }
+          }
+        });
+        pageContent = contentResult[0]?.result;
+      } catch (error) {
+        console.log('Could not extract content from tab (restricted page or error):', error.message);
+      }
+
+      // Build prompt with available context
+      let promptParts = [`Title: "${metadata.title}"`];
+
+      // Add domain and path
+      if (metadata.path && metadata.path.length > 1 && metadata.path.length < 50) {
+        promptParts.push(`URL: ${metadata.domain}${metadata.path}`);
+      } else {
+        promptParts.push(`Domain: ${metadata.domain}`);
+      }
+
+      // Add metadata if available (budget ~500 chars total for metadata+content)
+      if (pageContent) {
+        if (pageContent.description) {
+          promptParts.push(`Description: ${pageContent.description.substring(0, 150)}`);
+        }
+        if (pageContent.headings && pageContent.headings.length > 0) {
+          promptParts.push(`Headings: ${pageContent.headings.slice(0, 3).join(', ')}`);
+        }
+        if (pageContent.excerpt) {
+          // Only include excerpt if we have token budget (~200 chars)
+          promptParts.push(`Content excerpt: ${pageContent.excerpt.substring(0, 200)}`);
+        }
+      }
+
+      const prompt = `Summarize this web page in 10-15 words, focusing on the main topic/purpose.
+
+${promptParts.join('\n')}
+
+Respond with ONLY the summary, no extra text. Focus on what the page is ABOUT, not what it IS.
+Examples:
+- "GitHub - Repository: Code editor plugin development"
+- "Reddit discussion: Dog training techniques for puppies"
+- "Amazon product: Wireless keyboard with backlight"
+- "Stack Overflow: JavaScript async/await error handling"`;
+
+      const summary = await this.aiSession.prompt(prompt);
+      const cleanSummary = summary.trim();
+
+      // Cache the result
+      this.summaryCache.set(cacheKey, cleanSummary);
+
+      return cleanSummary;
+    } catch (error) {
+      console.error('Error generating tab summary:', error);
+      // Fallback to domain + title if AI fails
+      return `${metadata.domain}: ${metadata.title.substring(0, 50)}`;
+    }
+  }
+
+  extractDomain(url) {
+    try {
+      return new URL(url).hostname;
+    } catch {
+      return '';
+    }
+  }
+
+  extractPath(url) {
+    try {
+      const urlObj = new URL(url);
+      // Get pathname without query string or hash
+      // e.g., "/woodburn-or/" from the Zillow URL
+      return urlObj.pathname;
+    } catch {
+      return '';
     }
   }
 
@@ -754,25 +757,24 @@ class BetterTabsAI {
 
       // Check for cached results unless force refresh
       if (!forceRefresh) {
-        const stored = await chrome.storage.local.get(['lastAnalysisResults', 'lastAnalysisTime', 'lastAnalysisTabCount']);
+        const stored = await chrome.storage.local.get(['lastAnalysisResults', 'lastAnalysisTime', 'lastTabsHash']);
         if (stored.lastAnalysisResults && stored.lastAnalysisTime) {
-          const age = Date.now() - stored.lastAnalysisTime;
-          const tabCountChanged = stored.lastAnalysisTabCount !== groupableTabs.length;
+          // Create hash of current tabs (URL + title)
+          const currentHash = groupableTabs.map(t => `${t.url}|${t.title}`).sort().join('::');
+          const tabsUnchanged = stored.lastTabsHash === currentHash;
 
-          // Use cached results if tab count hasn't changed and cache is valid
-          if (!tabCountChanged && stored.lastAnalysisResults && stored.lastAnalysisResults.analyses) {
-            console.log('✅ Using cached analysis results (age:', Math.round(age / 1000), 'seconds, tab count unchanged)');
+          if (tabsUnchanged) {
+            const age = Date.now() - stored.lastAnalysisTime;
+            console.log('✅ Using cached suggestions (age:', Math.round(age / 1000), 'seconds, tabs unchanged)');
             return {
               success: true,
               ...stored.lastAnalysisResults,
               cached: true,
               cacheAge: age,
-              message: `Using cached analysis (${Math.round(age / 1000)}s old)`
+              message: `Using cached suggestions (${Math.round(age / 1000)}s old)`
             };
-          } else if (tabCountChanged) {
-            console.log('🔄 Tab count changed:', stored.lastAnalysisTabCount, '→', groupableTabs.length, '- refreshing analysis');
           } else {
-            console.log('🗑️ Cached results invalid, refreshing analysis');
+            console.log('🔄 Tabs changed - refreshing suggestions');
           }
         }
       }
@@ -811,347 +813,77 @@ class BetterTabsAI {
   }
 
   async performBackgroundAnalysis(tabs) {
+    console.log(`🤖 Analyzing ${tabs.length} tabs (generating summaries + grouping)...`);
+
+    this.analysisProgress.status = 'summarizing';
+    this.analysisProgress.current = 0;
+    this.analysisProgress.total = tabs.length;
+
+    // Stage 1: Generate summaries for each tab (cached)
+    console.log(`📝 Stage 1: Generating summaries for ${tabs.length} tabs...`);
+    const tabData = await Promise.all(tabs.map(async (t, index) => {
+      const summary = await this.generateTabSummary(t);
+      this.analysisProgress.current = index + 1;
+      return {
+        id: t.id,
+        title: t.title,
+        url: t.url,
+        domain: this.extractDomain(t.url),
+        summary: summary // AI-generated concise summary
+      };
+    }));
+
+    console.log(`✅ Stage 1 complete: ${tabData.length} summaries generated`);
+
+    // Stage 2: Get existing groups
+    const existingGroups = await this.getExistingGroupInfo();
+
+    // Stage 3: Single AI call to suggest groups using summaries
+    this.analysisProgress.status = 'grouping';
+    this.analysisProgress.current = 0;
+    this.analysisProgress.total = 1;
+    console.log(`🎯 Stage 2: Suggesting groups...`);
+    const suggestionResult = await this.suggestGroupsDirect(tabData, existingGroups);
+
+    this.analysisProgress.current = 1;
+
     const results = {
       totalTabs: tabs.length,
-      analyses: [],
-      suggestions: [],
-      cacheStats: this.cacheManager.getStats()
+      suggestions: suggestionResult.suggestions || [],
+      existingGroups: suggestionResult.existingGroups || []
     };
 
-    // Use concurrent queue - maintain N concurrent tasks, add new one as each completes
-    const MAX_CONCURRENT = this.settings.maxConcurrentAnalysis || 5;
-    const queue = [...tabs]; // Copy array
-    const inProgress = new Set();
-    const retryQueue = []; // Tabs that timed out, will retry with delay
-    let completed = 0;
-    let progressiveDelay = 0; // Progressive delay for ALL tabs (100ms increments, max 1000ms)
-
-    const analyzeWithTimeout = async (tab, isRetry = false) => {
-      try {
-        // Add progressive delay to ALL tabs to prevent overwhelming the AI
-        if (progressiveDelay > 0) {
-          await new Promise(resolve => setTimeout(resolve, progressiveDelay));
-        }
-
-        const analysisPromise = this.analyzeTab(tab.id, tab);
-        const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Analysis timeout')), 30000)
-        );
-
-        const analysis = await Promise.race([analysisPromise, timeoutPromise]);
-
-        if (analysis && !analysis.error && !analysis.fallback) {
-          return {
-            tabId: tab.id,
-            ...analysis
-          };
-        }
-        return null;
-      } catch (error) {
-        if (error.message === 'Analysis timeout') {
-          // Increase delay for ALL future tabs (100ms increments, max 1000ms)
-          if (progressiveDelay < 1000) {
-            progressiveDelay += 100;
-            console.log(`⏱️ Timeout detected, increasing delay to ${progressiveDelay}ms for future tabs`);
-          }
-
-          if (!isRetry) {
-            console.warn(`⏱️ Timeout analyzing tab ${tab.id}: ${tab.title} - will retry with delay`);
-            retryQueue.push(tab);
-          } else {
-            console.error(`⏱️ Timeout on retry for tab ${tab.id}: ${tab.title} - skipping`);
-          }
-        } else {
-          console.error(`Error analyzing tab ${tab.id}:`, error);
-        }
-        return null;
-      }
-    };
-
-    const processNext = async () => {
-      while (queue.length > 0 || inProgress.size > 0) {
-        // Fill up to MAX_CONCURRENT tasks
-        while (queue.length > 0 && inProgress.size < MAX_CONCURRENT) {
-          const tab = queue.shift();
-          const promise = analyzeWithTimeout(tab).then(result => {
-            inProgress.delete(promise);
-            completed++;
-            this.analysisProgress.current = completed;
-            console.log(`Progress: ${completed}/${this.analysisProgress.total}`);
-
-            if (result) {
-              results.analyses.push(result);
-            }
-            return result;
-          });
-          inProgress.add(promise);
-        }
-
-        // Wait for at least one to complete before continuing
-        if (inProgress.size > 0) {
-          await Promise.race(inProgress);
-        }
-      }
-    };
-
-    await processNext();
-
-    // Process retry queue if there were timeouts
-    if (retryQueue.length > 0) {
-      console.log(`🔄 Retrying ${retryQueue.length} timed-out tabs with ${progressiveDelay}ms delay...`);
-      queue.push(...retryQueue);
-      retryQueue.length = 0; // Clear retry queue
-
-      // Process retries
-      while (queue.length > 0 || inProgress.size > 0) {
-        while (queue.length > 0 && inProgress.size < MAX_CONCURRENT) {
-          const tab = queue.shift();
-          const promise = analyzeWithTimeout(tab, true).then(result => {
-            inProgress.delete(promise);
-            completed++;
-            this.analysisProgress.current = completed;
-            console.log(`Progress (retry): ${completed}/${this.analysisProgress.total}`);
-
-            if (result) {
-              results.analyses.push(result);
-            }
-            return result;
-          });
-          inProgress.add(promise);
-        }
-
-        if (inProgress.size > 0) {
-          await Promise.race(inProgress);
-        }
-      }
-    }
-
-    // Generate grouping suggestions
-    if (results.analyses.length > 0) {
-      this.analysisProgress.status = 'grouping';
-      const suggestionResult = await this.suggestGroups(results.analyses);
-      results.suggestions = suggestionResult.suggestions;
-      results.existingGroups = suggestionResult.existingGroups;
-    }
-
-    // Update cache stats
-    results.cacheStats = this.cacheManager.getStats();
+    // Create hash of tabs for cache invalidation
+    const tabsHash = tabs.map(t => `${t.url}|${t.title}`).sort().join('::');
 
     // Store results for popup to retrieve
     await chrome.storage.local.set({
       lastAnalysisResults: results,
       lastAnalysisTime: Date.now(),
-      lastAnalysisTabCount: tabs.length
+      lastTabsHash: tabsHash
     });
 
     this.analysisInProgress = false;
     this.analysisProgress.status = 'complete';
 
+    // Broadcast completion to any open interfaces
+    try {
+      chrome.runtime.sendMessage({
+        action: 'analysisComplete',
+        results: results
+      }).catch(() => {
+        // Ignore if no listeners
+      });
+    } catch (e) {
+      // Ignore broadcast errors
+    }
+
     console.log('✅ Background analysis complete:', results);
     return results;
   }
 
-  async analyzeTab(tabId, tabData = null) {
-    try {
-      // Get tab data if not provided
-      if (!tabData) {
-        tabData = await chrome.tabs.get(tabId);
-      }
-
-      // Start with metadata analysis (staged approach)
-      const metadata = {
-        title: tabData.title || '',
-        url: tabData.url || '',
-        domain: this.extractDomain(tabData.url),
-        favIconUrl: tabData.favIconUrl || ''
-      };
-
-      // Try to get additional content if metadata isn't sufficient
-      let content = '';
-      try {
-        const contentResult = await chrome.scripting.executeScript({
-          target: { tabId: tabId },
-          function: this.extractPageContent
-        });
-        content = contentResult[0]?.result || '';
-      } catch (error) {
-        console.log('Could not extract content from tab:', error.message);
-      }
-
-      // Generate cache key with content hash
-      const cacheKey = this.cacheManager.generateKey(metadata, content);
-
-      // Check cache first
-      const cached = this.cacheManager.get(cacheKey);
-      if (cached) {
-        console.log('✅ Cache hit for:', tabData.title);
-        return cached;
-      }
-
-      console.log('❌ Cache miss for:', tabData.title);
-      const analysis = await this.performAIAnalysis(metadata, content);
-
-      // Cache the result
-      this.cacheManager.set(cacheKey, analysis);
-
-      return analysis;
-    } catch (error) {
-      console.error('Error analyzing tab:', error);
-      return { error: error.message };
-    }
-  }
-
-  extractDomain(url) {
-    try {
-      return new URL(url).hostname;
-    } catch {
-      return '';
-    }
-  }
-
-  // This function runs in the context of the web page
-  extractPageContent() {
-    try {
-      // Get meta description
-      const metaDesc = document.querySelector('meta[name="description"]')?.content || '';
-      
-      // Get first 500 characters of text content
-      const textContent = document.body?.innerText || '';
-      const excerpt = textContent.substring(0, 500);
-      
-      // Get page headings
-      const headings = Array.from(document.querySelectorAll('h1, h2, h3'))
-        .map(h => h.textContent?.trim())
-        .filter(text => text && text.length > 0)
-        .slice(0, 5);
-
-      return {
-        metaDescription: metaDesc,
-        excerpt: excerpt,
-        headings: headings
-      };
-    } catch (error) {
-      return { error: error.message };
-    }
-  }
-
-  async performAIAnalysis(metadata, content) {
-    try {
-      // Ensure we have an AI session
-      if (!this.aiSession) {
-        console.log('No AI session available, attempting to create one...');
-        try {
-          await this.createAISession();
-        } catch (error) {
-          console.error('Failed to create AI session:', error);
-          return this.createFallbackAnalysis(metadata);
-        }
-      }
-
-      // If still no session, use fallback
-      if (!this.aiSession) {
-        console.log('AI session unavailable, using fallback analysis');
-        return this.createFallbackAnalysis(metadata);
-      }
-
-      // Build the analysis prompt
-      const prompt = `Analyze this web page and categorize it for intelligent tab grouping:
-
-Title: ${metadata.title}
-URL: ${metadata.url}
-Domain: ${metadata.domain}
-${content.metaDescription ? `Description: ${content.metaDescription}` : ''}
-${content.excerpt ? `Content excerpt: ${content.excerpt}` : ''}
-${content.headings?.length ? `Headings: ${content.headings.join(', ')}` : ''}
-
-CRITICAL INSTRUCTIONS for categorization:
-
-1. **Domain Similarity is Key**: If the domain matches other tabs, they should likely be grouped together
-   - Same exact domain = very likely related (amazon.com tabs go together)
-   - Same parent domain = likely related (docs.google.com and drive.google.com)
-
-2. **Recognize Tool Ecosystems**: Look for these common patterns:
-   - Media servers: Radarr, Sonarr, Lidarr, Prowlarr, autobrr (→ "Media Server Tools")
-   - Google services: Docs, Drive, Gmail, Calendar (→ "Google Workspace")
-   - Game tools: DIM, Braytech, light.gg (→ "Destiny Tools" or game name)
-   - Development: GitHub, GitLab, Stack Overflow (→ "Development Tools")
-
-3. **Shopping & Search Relationships**: Recognize when tabs are about the same topic
-   - "ladder stabilizers" search + Home Depot "Ladder Accessories" = both about ladders/home improvement
-   - Group by shopping topic, not just store: "Ladder Shopping" or "Home Improvement Shopping"
-
-4. **Specific Categories** - Include identifying details:
-   - Shopping: "{Store} Shopping" or "{Topic} Shopping" (e.g., "Ladder Shopping", "Amazon Electronics")
-   - Development: "{Technology} Development" (e.g., "React Development", "Python Development")
-   - Documentation: "{Technology} Docs" (e.g., "Chrome API Docs", "React Docs")
-   - Social: "{Platform} Social" (e.g., "Twitter", "LinkedIn")
-
-5. **Specific is Better**: Include identifying details in categories
-   - Shopping: "{Topic} Shopping" or "{Store} Shopping"
-   - Development: "{Technology} Development"
-   - Documentation: "{Technology} Docs"
-   - Tools: "{Tool Name}" or "{Purpose} Tools"
-
-Examples of GOOD categorization:
-- Home Depot page about ladders → category: "Home Improvement Shopping"
-- Google search "ladder stabilizers" → category: "Shopping Results"
-- Radarr web UI → category: "Media Server Tools"
-- DIM (Destiny Item Manager) → category: "Destiny Tools"
-- GitHub repo page → category: "Development Tools"
-
-IMPORTANT: Respond with ONLY the raw JSON object, without any markdown formatting, code blocks, or explanatory text.
-
-Provide a JSON response with this exact structure:
-{
-  "category": "specific category that emphasizes relationships and grouping potential",
-  "subcategory": "even more specific if needed",
-  "summary": "brief 1-sentence summary emphasizing topic/purpose",
-  "confidence": 0.7
-}`;
-
-      // Use the persistent service worker AI session
-      console.log('Sending prompt to AI session...');
-      const response = await this.aiSession.prompt(prompt);
-      console.log('Received AI response (length:', response.length, '):', response.substring(0, 100) + '...');
-
-      // Warn if response seems truncated
-      if (response.length < 50) {
-        console.warn('⚠️ Response seems unusually short, may be truncated');
-      }
-
-      // Parse the response (handle markdown code blocks)
-      try {
-        const parsed = this.extractJSON(response);
-        return {
-          ...parsed,
-          domain: metadata.domain,
-          title: metadata.title,
-          url: metadata.url
-        };
-      } catch (parseError) {
-        console.error('Error parsing AI response:', parseError);
-        console.error('Raw response:', response);
-        return this.createFallbackAnalysis(metadata);
-      }
-    } catch (error) {
-      console.error('Error in AI analysis:', error);
-
-      // If session was destroyed or became invalid, try to recreate it once
-      if (error.message?.includes('session') || error.message?.includes('Session')) {
-        console.log('AI session may be invalid, attempting to recreate...');
-        this.aiSession = null;
-        try {
-          await this.createAISession();
-          // Retry the analysis once with new session
-          return await this.performAIAnalysis(metadata, content);
-        } catch (recreateError) {
-          console.error('Failed to recreate session:', recreateError);
-        }
-      }
-
-      return this.createFallbackAnalysis(metadata);
-    }
-  }
+  // Removed: analyzeTab() - no longer needed with single-pass direct grouping
+  // Removed: extractPageContent() and performAIAnalysis() - no longer needed with single-pass direct grouping
 
   extractJSON(text) {
     // Handle markdown code blocks that wrap JSON
@@ -1166,11 +898,18 @@ Provide a JSON response with this exact structure:
     if (codeBlockMatch) {
       let jsonText = codeBlockMatch[1].trim();
 
-      // If JSON appears incomplete (missing closing brace), try to complete it
+      // If JSON appears incomplete (missing closing brackets/braces), try to complete it
+      const openBrackets = (jsonText.match(/\[/g) || []).length;
+      const closeBrackets = (jsonText.match(/\]/g) || []).length;
       const openBraces = (jsonText.match(/\{/g) || []).length;
       const closeBraces = (jsonText.match(/\}/g) || []).length;
+
+      // Complete missing braces and brackets
       if (openBraces > closeBraces) {
-        jsonText += '\n}'.repeat(openBraces - closeBraces);
+        jsonText += '\n  }'.repeat(openBraces - closeBraces);
+      }
+      if (openBrackets > closeBrackets) {
+        jsonText += '\n]'.repeat(openBrackets - closeBrackets);
       }
 
       if (jsonText.length > 0) {
@@ -1183,32 +922,48 @@ Provide a JSON response with this exact structure:
       }
     }
 
-    // Try to find the most complete JSON object
-    // Use greedy matching to get the longest valid JSON
-    const jsonMatches = text.matchAll(/\{[^\}]*\}/g);
-    const matches = Array.from(jsonMatches);
+    // Try to find JSON array starting with [
+    const arrayMatch = text.match(/\[([\s\S]*?)(?:\]|$)/);
+    if (arrayMatch) {
+      let jsonText = '[' + arrayMatch[1];
 
-    // Try parsing from longest to shortest match
-    for (const match of matches.sort((a, b) => b[0].length - a[0].length)) {
+      // Complete incomplete JSON array
+      const openBraces = (jsonText.match(/\{/g) || []).length;
+      const closeBraces = (jsonText.match(/\}/g) || []).length;
+      const openBrackets = (jsonText.match(/\[/g) || []).length;
+      const closeBrackets = (jsonText.match(/\]/g) || []).length;
+
+      if (openBraces > closeBraces) {
+        jsonText += '\n  }'.repeat(openBraces - closeBraces);
+      }
+      if (openBrackets > closeBrackets) {
+        jsonText += '\n]'.repeat(openBrackets - closeBrackets);
+      }
+
       try {
-        const parsed = JSON.parse(match[0]);
-        // Validate it has expected fields
-        if (parsed.category || parsed.summary) {
-          return parsed;
-        }
+        return JSON.parse(jsonText);
       } catch (e) {
-        // Try next match
+        console.warn('Failed to parse array JSON:', e.message);
       }
     }
 
-    // Try to find any JSON-like object with nested braces
-    const nestedMatch = text.match(/\{[\s\S]*\}/);
-    if (nestedMatch) {
+    // Try to find JSON object starting with {
+    const objectMatch = text.match(/\{([\s\S]*?)(?:\}|$)/);
+    if (objectMatch) {
+      let jsonText = '{' + objectMatch[1];
+
+      // Complete incomplete JSON object
+      const openBraces = (jsonText.match(/\{/g) || []).length;
+      const closeBraces = (jsonText.match(/\}/g) || []).length;
+
+      if (openBraces > closeBraces) {
+        jsonText += '\n}'.repeat(openBraces - closeBraces);
+      }
+
       try {
-        return JSON.parse(nestedMatch[0]);
+        return JSON.parse(jsonText);
       } catch (e) {
-        console.warn('Failed to parse nested JSON:', e.message);
-        console.warn('Text preview:', nestedMatch[0].substring(0, 200));
+        console.warn('Failed to parse object JSON:', e.message);
       }
     }
 
@@ -1380,85 +1135,76 @@ Provide a JSON response with this exact structure:
     };
   }
 
-  async suggestGroups(analyses) {
+  async suggestGroupsDirect(tabData, existingGroups = []) {
     try {
       if (!this.aiSession) {
         await this.createAISession();
       }
 
-      console.log('📊 Suggesting groups from', analyses.length, 'tabs using AI (direct grouping)');
+      console.log('📊 Suggesting groups from', tabData.length, 'tabs using single AI call');
 
-      // Prepare tab data for AI - use RAW titles/URLs, ignore pre-categorization
-      const tabSummaries = analyses.map(a => ({
-        id: a.tabId,
-        title: a.title,
-        url: a.url,
-        domain: a.domain
-      }));
-
-      // Ask AI to suggest groupings based on semantic similarity
-      const groupingPrompt = `Analyze these browser tabs and suggest logical groupings based on their TITLES and DOMAINS.
+      // Ask AI to suggest groupings based on semantic similarity using summaries
+      const groupingPrompt = `Analyze these browser tabs and suggest logical groupings based on their SUMMARIES.
 
 Tabs:
-${tabSummaries.map((t, i) => `${i + 1}. "${t.title}" (${t.domain})`).join('\n')}
+${tabData.map((t, i) => `${i + 1}. ${t.summary} (${t.domain})`).join('\n')}
 
-Rules:
-- Group tabs by ACTUAL CONTENT/PURPOSE (e.g., "House Hunting in Woodburn", "MFT Workbench Project", "Social Media")
-- Each group needs 2+ tabs
-- Each tab can only be in ONE group
-- Ignore technical domains - focus on what the user is actually doing
-- DON'T group unrelated tabs just because they're from the same domain
+${this.settings.customAIPromptRules || DEFAULT_AI_PROMPT_RULES}
 
-Examples of GOOD grouping:
-- Multiple Zillow tabs about Woodburn → "House Hunting in Woodburn"
-- Tabs about MFT drilling guides, router templates → "MFT Workbench Setup"
-- Multiple Bluesky tabs → "Bluesky Social Media"
+Aggressiveness: ${this.settings.aggressiveness}
+- "conservative": Only group tabs that are VERY clearly related (confidence >= 0.8)
+- "moderate": Group tabs that are likely related (confidence >= 0.6)
+- "aggressive": Group tabs that might be related (confidence >= 0.4)
 
-Examples of BAD grouping:
-- Google Messages + woodworking tabs (totally unrelated!)
-- "Tools" (too generic - what KIND of tools?)
+IMPORTANT: Keep response CONCISE - you may hit token limits!
 
-Return JSON array:
-[
-  {
-    "groupName": "specific descriptive name",
-    "reason": "why these tabs belong together",
-    "tabIndices": [1, 3, 5],
-    "confidence": 0.8
-  }
-]`;
+Return COMPACT JSON array:
+[{"name":"Group Name","tabs":[{"i":1,"c":0.9},{"i":3,"c":0.8}],"conf":0.85}]
+
+Keys: name=groupName, tabs=array of {i:index,c:confidence}, conf=groupConfidence`;
 
       console.log('🤖 Asking AI to suggest groups...');
       const aiResponse = await this.aiSession.prompt(groupingPrompt);
       const groupSuggestions = this.extractJSON(aiResponse);
 
       if (!groupSuggestions || !Array.isArray(groupSuggestions)) {
-        console.warn('AI did not return valid group suggestions, falling back to category grouping');
-        return this.fallbackCategoryGrouping(analyses);
+        console.warn('AI did not return valid group suggestions, returning empty');
+        return { suggestions: [], existingGroups };
       }
 
       console.log(`🎯 AI suggested ${groupSuggestions.length} groups`);
 
-      // Convert AI suggestions to our format
+      // Convert AI suggestions to our format with per-tab confidence
+      // Handle both compact format {name,tabs:[{i,c}],conf} and verbose format {groupName,tabs:[{index,confidence}],groupConfidence}
       const suggestions = groupSuggestions.map(g => {
-        const tabs = (g.tabIndices || [])
-          .map(idx => tabSummaries[idx - 1]) // Convert 1-based to 0-based
-          .map(ts => analyses.find(a => a.tabId === ts.id))
-          .filter(Boolean);
+        const groupName = g.name || g.groupName;
+        const groupConf = g.conf !== undefined ? g.conf : (g.groupConfidence || 0.7);
+
+        const tabs = (g.tabs || [])
+          .map(tabInfo => {
+            // Handle compact format {i,c} or verbose format {index,confidence}
+            const tabIndex = tabInfo.i !== undefined ? tabInfo.i : tabInfo.index;
+            const tabConf = tabInfo.c !== undefined ? tabInfo.c : (tabInfo.confidence || 0.7);
+            const tabId = tabData[tabIndex - 1]?.id; // Convert 1-based to 0-based
+
+            return tabId ? {
+              id: tabId,
+              confidence: tabConf
+            } : null;
+          })
+          .filter(Boolean)
+          // Filter tabs by minimum per-tab confidence
+          .filter(tab => tab.confidence >= this.settings.minTabConfidence);
 
         return {
-          groupName: g.groupName,
-          color: this.getCategoryColor(g.groupName),
-          tabs: tabs,
-          confidence: g.confidence || 0.7,
-          reason: g.reason
+          groupName: groupName,
+          color: this.getCategoryColor(groupName),
+          confidence: groupConf,
+          tabs: tabs // Array of {id, confidence}
         };
       }).filter(s => s.tabs.length >= 2); // Remove groups with <2 tabs
 
       console.log(`✅ Generated ${suggestions.length} AI-suggested groups`);
-
-      // Get existing groups for debugging
-      const existingGroups = await this.getExistingGroupInfo();
 
       // Filter by minimum confidence threshold
       const filtered = suggestions.filter(s =>
@@ -1466,9 +1212,9 @@ Return JSON array:
         s.tabs &&
         s.tabs.length >= 2
       );
-      console.log(`🎯 Filtered to ${filtered.length} suggestions (threshold: ${this.settings.minConfidenceThreshold}, min 2 tabs)`);
+      console.log(`🎯 Filtered to ${filtered.length} suggestions (threshold: ${this.settings.minConfidenceThreshold})`);
 
-      // Sort by confidence and tab count
+      // Sort by confidence and tab count (larger, more confident groups first)
       filtered.sort((a, b) => {
         const scoreA = a.tabs.length * a.confidence;
         const scoreB = b.tabs.length * b.confidence;
@@ -1479,45 +1225,18 @@ Return JSON array:
       const limited = filtered.slice(0, this.settings.maxSuggestions);
       console.log(`📋 Returning ${limited.length} suggestions (max: ${this.settings.maxSuggestions})`);
 
-      // Remove overlapping suggestions - keep only the highest confidence suggestion for each tab
-      const deduplicated = this.deduplicateSuggestions(limited);
+      // Remove overlapping suggestions using per-tab confidence
+      const deduplicated = this.deduplicateSuggestionsWithTabConfidence(limited);
       console.log(`🔀 Deduplicated to ${deduplicated.length} non-overlapping suggestions`);
 
-      // Transform suggestions to use tabIds instead of tabs array
-      const transformed = deduplicated.map(s => {
-        // Analysis objects have 'tabId' property, not 'id'
-        const tabIds = (s.tabs || []).map(t => t.tabId || t.id).filter(Boolean);
-        console.log(`Transforming suggestion "${s.groupName}":`, {
-          originalTabs: s.tabs?.length || 0,
-          tabIds: tabIds,
-          tabIdsLength: tabIds.length
-        });
-        return {
-          groupName: s.groupName,
-          color: s.color,
-          confidence: s.confidence,
-          tabIds: tabIds,
-          isAddToExisting: s.isAddToExisting,
-          existingGroupId: s.existingGroupId
-        };
-      }).filter(s => s.tabIds && s.tabIds.length > 0);
-
-      console.log('Final transformed suggestions:', transformed.map(s => ({
+      console.log('Final suggestions:', deduplicated.map(s => ({
         name: s.groupName,
-        tabIds: s.tabIds
+        tabs: s.tabIds.length
       })));
 
-      // Return both suggestions and existing groups info for debugging
       return {
-        suggestions: transformed,
-        existingGroups: existingGroups.map(g => ({
-          title: g.title,
-          tabCount: g.tabCount
-        })),
-        settings: {
-          minConfidenceThreshold: this.settings.minConfidenceThreshold,
-          maxSuggestions: this.settings.maxSuggestions
-        }
+        suggestions: deduplicated,
+        existingGroups
       };
     } catch (error) {
       console.error('Error suggesting groups:', error);
@@ -1525,120 +1244,99 @@ Return JSON array:
     }
   }
 
-  createSuggestionsFromPatterns(patterns, analyses) {
-    const suggestions = [];
-
-    // Tool ecosystems get highest priority
-    patterns.toolEcosystems?.forEach(ecosystem => {
-      const tabs = ecosystem.tabs.map(t => analyses.find(a => a.tabId === t.id)).filter(Boolean);
-      if (tabs.length >= 2) {
-        suggestions.push({
-          groupName: ecosystem.name,
-          color: this.getCategoryColor(ecosystem.name),
-          tabs: tabs,
-          confidence: ecosystem.confidence,
-          source: 'pattern-ecosystem'
-        });
+  async findGroupForTabs(tabs, groups) {
+    try {
+      if (!this.aiSession) {
+        await this.createAISession();
       }
-    });
 
-    // Domain groups (same exact domain)
-    patterns.domainGroups?.forEach(group => {
-      const tabs = group.tabs.map(t => analyses.find(a => a.tabId === t.id)).filter(Boolean);
-      if (tabs.length >= 2) {
-        const domainName = group.domain.split('.')[0];
-        const capitalizedName = domainName.charAt(0).toUpperCase() + domainName.slice(1);
-        suggestions.push({
-          groupName: `${capitalizedName} Tabs`,
-          color: this.getCategoryColor('default'),
-          tabs: tabs,
-          confidence: group.confidence,
-          source: 'pattern-domain'
-        });
+      const prompt = `Find the best group for these tabs from the available groups.
+
+Tabs to place:
+${tabs.map((t, i) => `${i + 1}. "${t.title}" (${t.domain})`).join('\n')}
+
+Available groups:
+${groups.map((g, i) => `${i + 1}. "${g.name}" (color: ${g.color})`).join('\n')}
+
+Return the index (1-based) of the BEST matching group, or 0 if none match well.
+Respond with ONLY a JSON object:
+{
+  "groupIndex": 3,
+  "confidence": 0.85,
+  "reason": "These tabs are about X and group Y is for X"
+}`;
+
+      const aiResponse = await this.aiSession.prompt(prompt);
+      const result = this.extractJSON(aiResponse);
+
+      if (result.groupIndex && result.groupIndex > 0 && result.groupIndex <= groups.length) {
+        const selectedGroup = groups[result.groupIndex - 1];
+        return {
+          success: true,
+          groupId: selectedGroup.id,
+          confidence: result.confidence,
+          reason: result.reason
+        };
       }
-    });
 
-    // Keyword matches (shared keywords in titles)
-    patterns.keywordMatches?.forEach(group => {
-      const tabs = group.tabs.map(t => analyses.find(a => a.tabId === t.id)).filter(Boolean);
-      if (tabs.length >= 3) { // Higher threshold for keyword matches
-        const keyword = group.keyword.charAt(0).toUpperCase() + group.keyword.slice(1);
-        suggestions.push({
-          groupName: `${keyword} Related`,
-          color: this.getCategoryColor('default'),
-          tabs: tabs,
-          confidence: group.confidence,
-          source: 'pattern-keyword'
-        });
-      }
-    });
-
-    return suggestions;
+      return { success: false, message: 'No suitable group found' };
+    } catch (error) {
+      console.error('Error finding group:', error);
+      return { success: false, error: error.message };
+    }
   }
 
-  fallbackCategoryGrouping(analyses) {
-    // Simple fallback: group by category
-    console.log('📋 Using fallback category grouping');
-    const categoryGroups = {};
-    analyses.forEach(a => {
-      const cat = a.category || 'Uncategorized';
-      if (!categoryGroups[cat]) categoryGroups[cat] = [];
-      categoryGroups[cat].push(a);
-    });
+  // Removed: createSuggestionsFromPatterns() - no longer needed with single-pass direct grouping
+  // Removed: fallbackCategoryGrouping() - no longer needed with single-pass direct grouping
 
-    const suggestions = Object.entries(categoryGroups)
-      .filter(([_, tabs]) => tabs.length >= 2)
-      .map(([category, tabs]) => ({
-        groupName: category,
-        color: this.getCategoryColor(category),
-        tabs: tabs,
-        confidence: tabs.reduce((sum, t) => sum + (t.confidence || 0.5), 0) / tabs.length
-      }));
+  deduplicateSuggestionsWithTabConfidence(suggestions) {
+    // Track best assignment for each tab based on:
+    // 1. Tab's confidence in that group (primary)
+    // 2. Group size (secondary - larger groups preferred at same confidence)
+    // 3. Group confidence (tertiary)
+    const tabAssignments = new Map();
 
-    return {
-      suggestions: suggestions.slice(0, this.settings.maxSuggestions).map(s => ({
-        groupName: s.groupName,
-        color: s.color,
-        confidence: s.confidence,
-        tabIds: s.tabs.map(t => t.tabId)
-      })),
-      existingGroups: []
-    };
-  }
-
-  deduplicateSuggestions(suggestions) {
-    // Track which tabs are assigned to which suggestion (with confidence)
-    const tabAssignments = new Map(); // tabId -> { suggestionIndex, confidence }
-
-    // First pass: track all tab assignments
     suggestions.forEach((suggestion, index) => {
       (suggestion.tabs || []).forEach(tab => {
-        const tabId = tab.tabId || tab.id;
-        if (!tabId) return;
+        const existing = tabAssignments.get(tab.id);
 
-        const existing = tabAssignments.get(tabId);
-        if (!existing || suggestion.confidence > existing.confidence) {
-          tabAssignments.set(tabId, { suggestionIndex: index, confidence: suggestion.confidence });
+        // Calculate scores for comparison
+        const newScore = tab.confidence * (1 + suggestion.tabs.length * 0.1) * suggestion.confidence;
+        const existingScore = existing
+          ? existing.tabConfidence * (1 + existing.groupSize * 0.1) * existing.groupConfidence
+          : 0;
+
+        // Assign to group with higher score
+        if (!existing || newScore > existingScore) {
+          tabAssignments.set(tab.id, {
+            suggestionIndex: index,
+            tabConfidence: tab.confidence,
+            groupSize: suggestion.tabs.length,
+            groupConfidence: suggestion.confidence
+          });
         }
       });
     });
 
-    // Second pass: filter each suggestion to only include tabs assigned to it
-    const deduplicated = suggestions.map((suggestion, index) => {
-      const assignedTabs = (suggestion.tabs || []).filter(tab => {
-        const tabId = tab.tabId || tab.id;
-        const assignment = tabAssignments.get(tabId);
-        return assignment && assignment.suggestionIndex === index;
-      });
+    // Filter suggestions to only include tabs assigned to them, convert to tabIds format
+    return suggestions.map((suggestion, index) => {
+      const assignedTabIds = (suggestion.tabs || [])
+        .filter(tab => {
+          const assignment = tabAssignments.get(tab.id);
+          return assignment && assignment.suggestionIndex === index;
+        })
+        .map(tab => tab.id);
 
       return {
-        ...suggestion,
-        tabs: assignedTabs
+        groupName: suggestion.groupName,
+        color: suggestion.color,
+        confidence: suggestion.confidence,
+        tabIds: assignedTabIds
       };
-    }).filter(s => s.tabs.length >= 2); // Remove suggestions with less than 2 tabs
-
-    return deduplicated;
+    }).filter(s => s.tabIds.length >= 2);
   }
+
+  // Removed: deduplicateSuggestions() - replaced by deduplicateSuggestionsSimple() for new tabIds format
 
   createSubGroups(tabs, mainCategory) {
     const subGroups = [];

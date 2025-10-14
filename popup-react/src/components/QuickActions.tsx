@@ -20,11 +20,11 @@ function QuickActions({
   showAdvancedOptions,
 }: QuickActionsProps) {
   const getAnalyzeButtonText = () => {
-    if (!isAnalyzing) return '🤖 Analyze & Group Tabs';
+    if (!isAnalyzing) return '🤖 Analyze';
     if (analysisProgress.total > 0) {
       return `🤖 Analyzing ${analysisProgress.current}/${analysisProgress.total}...`;
     }
-    return '🤖 Starting...';
+    return '🤖 Analyzing...';
   };
 
   return (

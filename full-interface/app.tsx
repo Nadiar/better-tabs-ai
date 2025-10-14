@@ -57,6 +57,7 @@ interface StagedStateContextValue {
   searchTerm: string;
   duplicateTabs: number[];
   showAdvancedOptions: boolean;
+  selectedTabs: number[];
   undoRedo: ReturnType<typeof useUndoRedo>;
   updateStaged: (updaterFn: ((draft: AppState) => void) | Partial<AppState>) => void;
   resetToOriginal: () => void;
@@ -67,6 +68,8 @@ interface StagedStateContextValue {
   refreshFromChrome: () => Promise<void>;
   dismissConflictBanner: () => void;
   handleSearchChange: (term: string) => void;
+  handleSelectTab: (tabId: number, event: React.MouseEvent) => void;
+  handleFindGroup: (tabId: number, event: React.MouseEvent) => Promise<void>;
 }
 
 // Staged State Context - Provides staged state to all components
@@ -107,6 +110,7 @@ function App() {
   const [searchTerm, setSearchTerm] = useState('');
   const [duplicateTabs, setDuplicateTabs] = useState<number[]>([]);
   const [lastAnalysisClick, setLastAnalysisClick] = useState(0);
+  const [selectedTabs, setSelectedTabs] = useState<number[]>([]);
   const [showAdvancedOptions, setShowAdvancedOptions] = useState(false);
 
   // Undo/Redo functionality
@@ -198,6 +202,44 @@ function App() {
 
     window.addEventListener(NOTIFICATION_EVENT, handleNotification);
     return () => window.removeEventListener(NOTIFICATION_EVENT, handleNotification);
+  }, []);
+
+  // Listen for analysis completion broadcasts (via runtime messages)
+  useEffect(() => {
+    const handleMessage = (message: any) => {
+      if (message.action === 'analysisComplete') {
+        console.log('📨 Received analysis complete broadcast:', message.results);
+        if (message.results && message.results.suggestions) {
+          setSuggestions(message.results.suggestions);
+          NotificationManager.success(`Analysis complete! Found ${message.results.suggestions.length} grouping suggestions`);
+        }
+        setIsAnalyzing(false);
+        setAnalysisProgress({ current: 0, total: 0, status: 'idle' });
+      }
+    };
+
+    chrome.runtime.onMessage.addListener(handleMessage);
+    return () => chrome.runtime.onMessage.removeListener(handleMessage);
+  }, []);
+
+  // Listen for analysis completion via storage changes (more reliable for background analysis)
+  useEffect(() => {
+    const handleStorageChange = (changes: any, areaName: string) => {
+      if (areaName === 'local' && changes.lastAnalysisResults) {
+        console.log('💾 Storage changed: new analysis results available');
+        const newResults = changes.lastAnalysisResults.newValue;
+        if (newResults && newResults.suggestions) {
+          console.log('📊 Loading suggestions from storage:', newResults.suggestions);
+          setSuggestions(newResults.suggestions);
+          setIsAnalyzing(false);
+          setAnalysisProgress({ current: 0, total: 0, status: 'idle' });
+          NotificationManager.success(`Analysis complete! Found ${newResults.suggestions.length} grouping suggestions`);
+        }
+      }
+    };
+
+    chrome.storage.onChanged.addListener(handleStorageChange);
+    return () => chrome.storage.onChanged.removeListener(handleStorageChange);
   }, []);
 
   const loadSettings = async () => {
@@ -494,8 +536,9 @@ function App() {
   };
 
   const clearCache = async () => {
-    const result = await AIOperations.clearCache();
-    NotificationManager.fromResult(result, 'Cache cleared successfully');
+    await AIOperations.clearCache();
+    // Force page reload to clear UI completely
+    window.location.reload();
   };
 
   const copyDebugInfo = async () => {
@@ -643,15 +686,15 @@ function App() {
           });
 
           console.log('📋 Poll complete, resultsResponse:', resultsResponse);
+          console.log('📋 Response check - success:', resultsResponse.success, 'results:', resultsResponse.results, 'suggestions:', resultsResponse.results?.suggestions);
 
-          console.log('📊 Analysis complete! Results:', resultsResponse);
-
-          if (resultsResponse.results && resultsResponse.results.suggestions) {
+          if (resultsResponse.success && resultsResponse.results && resultsResponse.results.suggestions) {
             console.log(`✅ Setting ${resultsResponse.results.suggestions.length} suggestions:`, resultsResponse.results.suggestions);
             setSuggestions(resultsResponse.results.suggestions);
             NotificationManager.success(`Analysis complete! Found ${resultsResponse.results.suggestions.length} grouping suggestions`);
           } else {
             console.warn('⚠️ No suggestions in resultsResponse:', resultsResponse);
+            console.warn('⚠️ Checks failed - success:', resultsResponse.success, 'has results:', !!resultsResponse.results, 'has suggestions:', !!resultsResponse.results?.suggestions);
             NotificationManager.info('Analysis complete - no suggestions generated');
           }
 
@@ -699,6 +742,81 @@ function App() {
     setSearchTerm(term);
   };
 
+  const handleSelectTab = (tabId: number, event: React.MouseEvent) => {
+    if (event.ctrlKey || event.metaKey) {
+      // Multi-select with Ctrl/Cmd
+      setSelectedTabs(prev =>
+        prev.includes(tabId) ? prev.filter(id => id !== tabId) : [...prev, tabId]
+      );
+    } else {
+      // Single select
+      setSelectedTabs([tabId]);
+    }
+  };
+
+  const handleFindGroup = async (tabId: number, event: React.MouseEvent) => {
+    const tabsToFind = event.ctrlKey || event.metaKey ? selectedTabs : [tabId];
+
+    if (tabsToFind.length === 0) {
+      NotificationManager.warning('No tabs selected');
+      return;
+    }
+
+    try {
+      // Get tab data for AI analysis
+      const tabs = stagedState.tabs.filter(t => tabsToFind.includes(t.id));
+      const tabData = tabs.map(t => ({
+        id: t.id,
+        title: t.title,
+        url: t.url,
+        domain: new URL(t.url).hostname
+      }));
+
+      // Get all existing groups (staged + suggestions)
+      const allGroups = [
+        ...stagedState.groups.map(g => ({ id: g.id, name: g.title, color: g.color, type: 'existing' })),
+        ...(suggestions || []).map((s, i) => ({ id: `suggestion-${i}`, name: s.groupName, color: s.color, type: 'suggestion' }))
+      ];
+
+      if (allGroups.length === 0) {
+        NotificationManager.info('No groups available. Try creating a group first or running analysis.');
+        return;
+      }
+
+      // Ask AI to find best group
+      const response = await chrome.runtime.sendMessage({
+        action: 'findGroupForTabs',
+        tabs: tabData,
+        groups: allGroups
+      });
+
+      if (response.success && response.groupId) {
+        const group = allGroups.find(g => g.id === response.groupId);
+        NotificationManager.success(`Suggested group: ${group?.name}`);
+
+        // Auto-add to suggested group
+        if (group?.type === 'existing') {
+          updateStaged(draft => {
+            tabs.forEach(tab => {
+              const draftTab = draft.tabs.find(t => t.id === tab.id);
+              if (draftTab) draftTab.groupId = parseInt(group.id);
+            });
+          });
+        } else if (group?.type === 'suggestion') {
+          // Add to suggestion (would need to track this separately)
+          NotificationManager.info(`This would add to suggestion: ${group.name}`);
+        }
+
+        setSelectedTabs([]);
+      } else {
+        NotificationManager.warning('No suitable group found');
+      }
+    } catch (error) {
+      console.error('Error finding group:', error);
+      NotificationManager.error('Failed to find group');
+    }
+  };
+
   // Keyboard shortcuts for undo/redo
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -737,6 +855,7 @@ function App() {
     searchTerm,
     duplicateTabs,
     showAdvancedOptions,
+    selectedTabs,
     undoRedo,
     updateStaged,
     resetToOriginal,
@@ -746,7 +865,9 @@ function App() {
     copyDebugInfo,
     refreshFromChrome: loadChromeData,
     dismissConflictBanner,
-    handleSearchChange
+    handleSearchChange,
+    handleSelectTab,
+    handleFindGroup
   };
 
   if (error) {

@@ -66,12 +66,17 @@ function SuggestedGroup({ suggestion, tabs, onCreate, onDismiss }) {
 
       <div className="group-tabs">
         {suggestedTabs.map(tab => (
-          <div key={tab.id} className="tab-card suggested-tab">
+          <div
+            key={tab.id}
+            className="tab-card suggested-tab"
+            draggable="true"
+            data-tab-id={tab.id}
+          >
             <img
-              src={tab.favIconUrl || 'icons/icon16.png'}
+              src={tab.favIconUrl || chrome.runtime.getURL('icons/icon16.png')}
               alt=""
               className="tab-favicon"
-              onError={(e) => { e.target.src = 'icons/icon16.png'; }}
+              onError={(e) => { e.target.src = chrome.runtime.getURL('icons/icon16.png'); }}
             />
             <div className="tab-info">
               <div className="tab-title">{tab.title}</div>
