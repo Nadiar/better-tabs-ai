@@ -322,9 +322,13 @@ test.describe('Full Interface - Regression Tests', () => {
     await page.goto('http://127.0.0.1:8080/full-interface/dist/index.html');
     await page.waitForTimeout(1000);
 
-    // Filter out expected Chrome extension errors in file:// protocol
+    // Filter out expected Chrome extension errors and mock-related errors
     const criticalErrors = errors.filter(
-      (err) => !err.includes('chrome.') && !err.includes('extension')
+      (err) =>
+        !err.includes('chrome.') &&
+        !err.includes('extension') &&
+        !err.includes('ERR_UNKNOWN_URL_SCHEME') && // Mock chrome-extension:// URLs
+        !err.includes('ERR_BLOCKED_BY_CLIENT') // Ad blockers or extension blockers
     );
 
     expect(criticalErrors.length).toBe(0);
