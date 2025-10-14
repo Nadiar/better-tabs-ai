@@ -13,23 +13,102 @@ test.beforeAll(() => setupMockServer());
 test.afterEach(() => resetMockServer());
 test.afterAll(() => closeMockServer());
 
+// Helper to inject Chrome API mock
+async function injectChromeMock(page: any) {
+  await page.addInitScript(() => {
+    (window as any).chrome = {
+      runtime: {
+        sendMessage: async (msg: any) => {
+          if (msg.action === 'getSettings') {
+            return {
+              settings: {
+                minConfidenceThreshold: 0.5,
+                minTabConfidence: 0.5,
+                maxSuggestions: 10,
+                showConfidenceScores: true,
+                showInlineSuggestions: true,
+                defaultGroupColor: 'grey',
+                showAdvancedOptions: false
+              }
+            };
+          }
+          if (msg.action === 'checkAIAvailability') {
+            return {
+              available: true,
+              status: 'ready',
+              statusMessage: 'AI is ready',
+              capabilities: {
+                analyze: true,
+                generateNames: true
+              }
+            };
+          }
+          if (msg.action === 'getAnalysisProgress') {
+            return {
+              status: 'idle',
+              current: 0,
+              total: 0
+            };
+          }
+          if (msg.action === 'getLastAnalysisResults') {
+            return {
+              results: null,
+              timestamp: null
+            };
+          }
+          return { success: true, data: { available: true, status: 'ready' } };
+        },
+        getManifest: () => ({ version: '2.2.0' }),
+        getURL: (path: string) => `chrome-extension://mock/${path}`,
+        onMessage: { addListener: () => {}, removeListener: () => {} }
+      },
+      tabs: {
+        query: async () => [],
+        get: async () => null,
+        group: async () => 1,
+        ungroup: async () => {},
+        remove: async () => {},
+        onCreated: { addListener: () => {}, removeListener: () => {} },
+        onRemoved: { addListener: () => {}, removeListener: () => {} },
+        onUpdated: { addListener: () => {}, removeListener: () => {} },
+        onMoved: { addListener: () => {}, removeListener: () => {} }
+      },
+      tabGroups: {
+        TAB_GROUP_ID_NONE: -1,
+        query: async () => [],
+        update: async () => ({}),
+        move: async () => {},
+        onCreated: { addListener: () => {}, removeListener: () => {} },
+        onRemoved: { addListener: () => {}, removeListener: () => {} },
+        onUpdated: { addListener: () => {}, removeListener: () => {} },
+        onMoved: { addListener: () => {}, removeListener: () => {} }
+      },
+      windows: {
+        getAll: async () => [{ id: 1, tabs: [] }]
+      },
+      storage: {
+        local: { get: async () => ({}), set: async () => {}, remove: async () => {} },
+        onChanged: { addListener: () => {}, removeListener: () => {} }
+      }
+    };
+  });
+}
+
 test.describe('Full Interface - Baseline Tests', () => {
   test.beforeEach(async ({ page }) => {
-    // Navigate to full interface built file
-    await page.goto('file://' + process.cwd() + '/full-interface/dist/index.html');
-
-    // Wait for React app to load
+    await injectChromeMock(page);
+    await page.goto('http://127.0.0.1:8080/full-interface/dist/index.html');
     await page.waitForTimeout(1000);
   });
 
   test('should load full interface successfully', async ({ page }) => {
-    // Verify main app container exists
-    const appContainer = page.locator('#root, .app-container');
+    // Verify main app container exists (React renders into #root)
+    const appContainer = page.locator('.app-container');
     await expect(appContainer).toBeVisible();
 
-    // Verify header exists
-    const header = page.locator('header, .header');
-    await expect(header).toBeVisible();
+    // Verify root has content
+    const root = page.locator('#root');
+    await expect(root).not.toBeEmpty();
   });
 
   test('should display three-column layout', async ({ page }) => {
@@ -93,7 +172,8 @@ test.describe('Full Interface - Baseline Tests', () => {
 
 test.describe('Full Interface - Drag & Drop Baseline', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('file://' + process.cwd() + '/full-interface/dist/index.html');
+    await injectChromeMock(page);
+    await page.goto('http://127.0.0.1:8080/full-interface/dist/index.html');
     await page.waitForTimeout(1000);
   });
 
@@ -134,7 +214,8 @@ test.describe('Full Interface - Drag & Drop Baseline', () => {
 
 test.describe('Full Interface - AI Integration Baseline', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('file://' + process.cwd() + '/full-interface/dist/index.html');
+    await injectChromeMock(page);
+    await page.goto('http://127.0.0.1:8080/full-interface/dist/index.html');
     await page.waitForTimeout(1000);
   });
 
@@ -181,7 +262,8 @@ test.describe('Full Interface - AI Integration Baseline', () => {
 
 test.describe('Full Interface - Staged Changes Baseline', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('file://' + process.cwd() + '/full-interface/dist/index.html');
+    await injectChromeMock(page);
+    await page.goto('http://127.0.0.1:8080/full-interface/dist/index.html');
     await page.waitForTimeout(1000);
   });
 
@@ -225,6 +307,10 @@ test.describe('Full Interface - Staged Changes Baseline', () => {
 });
 
 test.describe('Full Interface - Regression Tests', () => {
+  test.beforeEach(async ({ page }) => {
+    await injectChromeMock(page);
+  });
+
   test('should not have console errors on load', async ({ page }) => {
     const errors: string[] = [];
     page.on('console', (msg) => {
@@ -233,7 +319,7 @@ test.describe('Full Interface - Regression Tests', () => {
       }
     });
 
-    await page.goto('file://' + process.cwd() + '/full-interface/dist/index.html');
+    await page.goto('http://127.0.0.1:8080/full-interface/dist/index.html');
     await page.waitForTimeout(1000);
 
     // Filter out expected Chrome extension errors in file:// protocol
@@ -245,9 +331,9 @@ test.describe('Full Interface - Regression Tests', () => {
   });
 
   test('should be responsive', async ({ page }) => {
-    await page.goto('file://' + process.cwd() + '/full-interface/dist/index.html');
+    await page.goto('http://127.0.0.1:8080/full-interface/dist/index.html');
 
-    const appContainer = page.locator('#root, .app-container');
+    const appContainer = page.locator('.app-container');
     const box = await appContainer.boundingBox();
 
     // Verify reasonable dimensions

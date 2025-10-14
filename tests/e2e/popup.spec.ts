@@ -13,10 +13,92 @@ test.beforeAll(() => setupMockServer());
 test.afterEach(() => resetMockServer());
 test.afterAll(() => closeMockServer());
 
+// Helper to inject Chrome API mock
+async function injectChromeMock(page: any) {
+  await page.addInitScript(() => {
+    (window as any).chrome = {
+      runtime: {
+        sendMessage: async (msg: any) => {
+          if (msg.action === 'getSettings') {
+            return {
+              settings: {
+                minConfidenceThreshold: 0.5,
+                minTabConfidence: 0.5,
+                maxSuggestions: 10,
+                showConfidenceScores: true,
+                showInlineSuggestions: true,
+                defaultGroupColor: 'grey',
+                showAdvancedOptions: false
+              }
+            };
+          }
+          if (msg.action === 'checkAIAvailability') {
+            return {
+              available: true,
+              status: 'ready',
+              statusMessage: 'AI is ready',
+              capabilities: {
+                analyze: true,
+                generateNames: true
+              }
+            };
+          }
+          if (msg.action === 'getAnalysisProgress') {
+            return {
+              status: 'idle',
+              current: 0,
+              total: 0
+            };
+          }
+          if (msg.action === 'getLastAnalysisResults') {
+            return {
+              results: null,
+              timestamp: null
+            };
+          }
+          return { success: true, data: { available: true, status: 'ready' } };
+        },
+        getManifest: () => ({ version: '2.2.0' }),
+        getURL: (path: string) => `chrome-extension://mock/${path}`,
+        onMessage: { addListener: () => {}, removeListener: () => {} }
+      },
+      tabs: {
+        query: async () => [],
+        get: async () => null,
+        group: async () => 1,
+        ungroup: async () => {},
+        remove: async () => {},
+        onCreated: { addListener: () => {}, removeListener: () => {} },
+        onRemoved: { addListener: () => {}, removeListener: () => {} },
+        onUpdated: { addListener: () => {}, removeListener: () => {} },
+        onMoved: { addListener: () => {}, removeListener: () => {} }
+      },
+      tabGroups: {
+        TAB_GROUP_ID_NONE: -1,
+        query: async () => [],
+        update: async () => ({}),
+        move: async () => {},
+        onCreated: { addListener: () => {}, removeListener: () => {} },
+        onRemoved: { addListener: () => {}, removeListener: () => {} },
+        onUpdated: { addListener: () => {}, removeListener: () => {} },
+        onMoved: { addListener: () => {}, removeListener: () => {} }
+      },
+      windows: {
+        getAll: async () => [{ id: 1, tabs: [] }]
+      },
+      storage: {
+        local: { get: async () => ({}), set: async () => {}, remove: async () => {} },
+        onChanged: { addListener: () => {}, removeListener: () => {} }
+      }
+    };
+  });
+}
+
 test.describe('Popup Interface - Baseline Tests', () => {
   test.beforeEach(async ({ page }) => {
-    // Navigate to popup HTML file
-    await page.goto('file://' + process.cwd() + '/popup/popup.html');
+    await injectChromeMock(page);
+    await page.goto('http://127.0.0.1:8080/popup-react/dist/index.html');
+    await page.waitForTimeout(1000);
   });
 
   test('should load popup interface successfully', async ({ page }) => {
@@ -104,7 +186,9 @@ test.describe('Popup Interface - Baseline Tests', () => {
 
 test.describe('Popup Interface - Mock AI Interactions', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('file://' + process.cwd() + '/popup/popup.html');
+    await injectChromeMock(page);
+    await page.goto('http://127.0.0.1:8080/popup-react/dist/index.html');
+    await page.waitForTimeout(1000);
   });
 
   test('should receive mocked AI analysis response', async ({ page }) => {
@@ -148,13 +232,19 @@ test.describe('Popup Interface - Mock AI Interactions', () => {
 });
 
 test.describe('Popup Interface - Regression Tests', () => {
+  test.beforeEach(async ({ page }) => {
+    await injectChromeMock(page);
+    await page.goto('http://127.0.0.1:8080/popup-react/dist/index.html');
+    await page.waitForTimeout(1000);
+  });
+
   test('should not have JavaScript errors on load', async ({ page }) => {
     const errors: string[] = [];
     page.on('pageerror', (error) => {
       errors.push(error.message);
     });
 
-    await page.goto('file://' + process.cwd() + '/popup/popup.html');
+    await page.reload();
     await page.waitForTimeout(500);
 
     // Should have no JS errors
@@ -162,7 +252,6 @@ test.describe('Popup Interface - Regression Tests', () => {
   });
 
   test('should maintain responsive layout', async ({ page }) => {
-    await page.goto('file://' + process.cwd() + '/popup/popup.html');
 
     // Popup should have standard extension dimensions
     const body = page.locator('body');
