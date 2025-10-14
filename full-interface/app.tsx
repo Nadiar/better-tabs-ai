@@ -208,7 +208,6 @@ function App() {
   useEffect(() => {
     const handleMessage = (message: any) => {
       if (message.action === 'analysisComplete') {
-        console.log('📨 Received analysis complete broadcast:', message.results);
         if (message.results && message.results.suggestions) {
           setSuggestions(message.results.suggestions);
           NotificationManager.success(`Analysis complete! Found ${message.results.suggestions.length} grouping suggestions`);
@@ -226,10 +225,8 @@ function App() {
   useEffect(() => {
     const handleStorageChange = (changes: any, areaName: string) => {
       if (areaName === 'local' && changes.lastAnalysisResults) {
-        console.log('💾 Storage changed: new analysis results available');
         const newResults = changes.lastAnalysisResults.newValue;
         if (newResults && newResults.suggestions) {
-          console.log('📊 Loading suggestions from storage:', newResults.suggestions);
           setSuggestions(newResults.suggestions);
           setIsAnalyzing(false);
           setAnalysisProgress({ current: 0, total: 0, status: 'idle' });
@@ -253,7 +250,6 @@ function App() {
     try {
       const response = await chrome.runtime.sendMessage({ action: 'getLastAnalysisResults' });
       if (response.results && response.results.suggestions) {
-        console.log('📋 Loaded suggestions on mount:', response.results.suggestions);
         setSuggestions(response.results.suggestions);
       }
     } catch (error) {
@@ -591,8 +587,6 @@ function App() {
     try {
       // Use shared AIOperations
       const result = await AIOperations.analyzeAllTabs();
-
-      console.log('📊 Analysis response:', result);
 
       if (!result.success) {
         NotificationManager.error(`Analysis failed: ${result.error.message}`);
