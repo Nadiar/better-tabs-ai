@@ -31,8 +31,7 @@
     "scripting"
   ],
   "host_permissions": [
-    "http://*/*",
-    "https://*/*"
+    "<all_urls>"
   ],
   "icons": {
     "16": "icons/icon16.png",

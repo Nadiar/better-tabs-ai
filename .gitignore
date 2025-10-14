@@ -72,18 +72,13 @@ REFACTOR_DECISIONS.md
 TEST_RESULTS.md
 STATUS.md
 
-# Claude AI and development files
-CLAUDE.md
-*claude*
-*CLAUDE*
+# Claude AI context files (auto-generated)
+.claude/
 
-# Testing and mock files
-tests/
+# Testing artifacts (not test source files)
 test-*.html
-test-*.py
-mock-*.html
-*Test*.js
-*Mock*.js
+test-results/
+playwright-report/
 
 # Temporary and diagnostic files
 *temp*

@@ -20,8 +20,8 @@
 
                 <div class="setting-item">
                     <label for="minConfidenceThreshold">
-                        <strong>Minimum Confidence Threshold</strong>
-                        <span class="setting-description">Only show suggestions above this confidence level</span>
+                        <strong>Minimum Group Confidence</strong>
+                        <span class="setting-description">Only show group suggestions above this confidence level</span>
                     </label>
                     <div class="slider-container">
                         <input type="range" id="minConfidenceThreshold"
@@ -34,6 +34,25 @@
                     <div class="range-labels">
                         <span>0.4 - More suggestions (aggressive)</span>
                         <span>0.9 - Fewer suggestions (conservative)</span>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <label for="minTabConfidence">
+                        <strong>Minimum Tab Confidence</strong>
+                        <span class="setting-description">Only include tabs with this confidence or higher in groups</span>
+                    </label>
+                    <div class="slider-container">
+                        <input type="range" id="minTabConfidence"
+                               min="0.3" max="0.9" step="0.1" value="0.5">
+                        <div class="slider-labels">
+                            <span class="value-display" id="tabConfidenceValue">0.5</span>
+                            <span class="slider-hint" id="tabConfidenceHint">Moderate</span>
+                        </div>
+                    </div>
+                    <div class="range-labels">
+                        <span>0.3 - Include uncertain tabs</span>
+                        <span>0.9 - Only very certain tabs</span>
                     </div>
                 </div>
 
@@ -101,31 +120,32 @@
                 </div>
             </section>
 
-            <!-- Performance Settings -->
+            <!-- AI Prompt Customization -->
             <section class="settings-section">
-                <h2>⚡ Performance</h2>
+                <h2>🤖 AI Prompt Rules</h2>
 
                 <div class="setting-item">
-                    <label class="checkbox-label">
-                        <input type="checkbox" id="enableContentAnalysis" checked>
-                        <span>
-                            <strong>Enable Content Analysis</strong>
-                            <span class="setting-description">Analyze page content (slower but more accurate)</span>
+                    <label for="customAIPromptRules">
+                        <strong>Custom AI Grouping Rules</strong>
+                        <span class="setting-description">Customize how the AI groups your tabs</span>
+                    </label>
+                    <textarea
+                        id="customAIPromptRules"
+                        rows="15"
+                        style="font-family: monospace; font-size: 0.9rem; width: 100%; resize: vertical;"
+                        placeholder="AI prompt rules will be loaded here..."
+                    ></textarea>
+                    <div style="margin-top: 0.5rem; display: flex; gap: 0.5rem;">
+                        <button id="restoreDefaultPromptBtn" class="secondary-btn" style="font-size: 0.875rem;">
+                            🔄 Restore Default Rules
+                        </button>
+                        <span class="setting-description" style="flex: 1; display: flex; align-items: center;">
+                            Reset to the default AI grouping rules
                         </span>
-                    </label>
-                </div>
-
-                <div class="setting-item">
-                    <label for="maxConcurrentAnalysis">
-                        <strong>Concurrent Analysis Limit</strong>
-                        <span class="setting-description">Maximum tabs to analyze simultaneously</span>
-                    </label>
-                    <div class="number-input">
-                        <input type="number" id="maxConcurrentAnalysis" min="5" max="20" value="10">
-                        <span class="unit">tabs</span>
                     </div>
                 </div>
             </section>
+
 
             <!-- Status Display -->
             <section class="settings-section status-section">

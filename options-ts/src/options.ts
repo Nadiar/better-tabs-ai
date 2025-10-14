@@ -15,13 +15,22 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function setupEventListeners() {
-  // Confidence threshold slider
+  // Group confidence threshold slider
   const confidenceSlider = document.getElementById(
     'minConfidenceThreshold'
   ) as HTMLInputElement;
   confidenceSlider?.addEventListener('input', (e) => {
     const target = e.target as HTMLInputElement;
     updateConfidenceDisplay(parseFloat(target.value));
+  });
+
+  // Tab confidence threshold slider
+  const tabConfidenceSlider = document.getElementById(
+    'minTabConfidence'
+  ) as HTMLInputElement;
+  tabConfidenceSlider?.addEventListener('input', (e) => {
+    const target = e.target as HTMLInputElement;
+    updateTabConfidenceDisplay(parseFloat(target.value));
   });
 
   // Save button
@@ -33,6 +42,11 @@ function setupEventListeners() {
   document
     .getElementById('resetBtn')
     ?.addEventListener('click', resetSettings);
+
+  // Restore default prompt button
+  document
+    .getElementById('restoreDefaultPromptBtn')
+    ?.addEventListener('click', restoreDefaultPrompt);
 
   // Cancel button
   document.getElementById('cancelBtn')?.addEventListener('click', () => {
@@ -65,6 +79,14 @@ function populateForm(settings: Settings) {
   if (confidenceSlider) {
     confidenceSlider.value = settings.minConfidenceThreshold.toString();
     updateConfidenceDisplay(settings.minConfidenceThreshold);
+  }
+
+  const tabConfidenceSlider = document.getElementById(
+    'minTabConfidence'
+  ) as HTMLInputElement;
+  if (tabConfidenceSlider) {
+    tabConfidenceSlider.value = settings.minTabConfidence.toString();
+    updateTabConfidenceDisplay(settings.minTabConfidence);
   }
 
   const maxSuggestionsInput = document.getElementById(
@@ -125,6 +147,14 @@ function populateForm(settings: Settings) {
   if (cacheDurationInput && settings.cacheDuration !== undefined) {
     cacheDurationInput.value = settings.cacheDuration.toString();
   }
+
+  // Custom AI Prompt Rules
+  const customPromptTextarea = document.getElementById(
+    'customAIPromptRules'
+  ) as HTMLTextAreaElement;
+  if (customPromptTextarea) {
+    customPromptTextarea.value = settings.customAIPromptRules || '';
+  }
 }
 
 function updateConfidenceDisplay(value: number) {
@@ -142,6 +172,25 @@ function updateConfidenceDisplay(value: number) {
       hint.textContent = 'Moderate';
     } else {
       hint.textContent = 'Conservative (fewer suggestions)';
+    }
+  }
+}
+
+function updateTabConfidenceDisplay(value: number) {
+  const valueDisplay = document.getElementById('tabConfidenceValue');
+  if (valueDisplay) {
+    valueDisplay.textContent = value.toFixed(1);
+  }
+
+  // Update hint text
+  const hint = document.getElementById('tabConfidenceHint');
+  if (hint) {
+    if (value <= 0.4) {
+      hint.textContent = 'Include uncertain tabs';
+    } else if (value <= 0.7) {
+      hint.textContent = 'Moderate certainty';
+    } else {
+      hint.textContent = 'Only very certain tabs';
     }
   }
 }
@@ -164,6 +213,9 @@ function getFormData(): Partial<Settings> {
     minConfidenceThreshold: parseFloat(
       getData('minConfidenceThreshold') || '0.5'
     ),
+    minTabConfidence: parseFloat(
+      getData('minTabConfidence') || '0.5'
+    ),
     maxSuggestions: parseInt(getData('maxSuggestions') || '10'),
 
     // UI Preferences
@@ -172,9 +224,12 @@ function getFormData(): Partial<Settings> {
     defaultGroupColor: getData('defaultGroupColor') as any,
     showAdvancedOptions: getChecked('showAdvancedOptions'),
 
-    // Performance
+    // Performance (deprecated)
     enableContentAnalysis: getChecked('enableContentAnalysis'),
     maxConcurrentAnalysis: parseInt(getData('maxConcurrentAnalysis') || '10'),
+
+    // Custom AI Prompt
+    customAIPromptRules: getData('customAIPromptRules') || undefined,
   };
 
   // Cache duration (if element exists)
@@ -210,6 +265,30 @@ async function saveSettings() {
   } finally {
     saveBtn.disabled = false;
     saveBtn.textContent = '💾 Save Settings';
+  }
+}
+
+async function restoreDefaultPrompt() {
+  if (!confirm('Restore default AI grouping rules? This will overwrite your custom rules.')) {
+    return;
+  }
+
+  try {
+    // Get default prompt from background
+    const response = await chrome.runtime.sendMessage({ action: 'getDefaultPromptRules' });
+
+    if (response.success) {
+      const customPromptTextarea = document.getElementById(
+        'customAIPromptRules'
+      ) as HTMLTextAreaElement;
+      if (customPromptTextarea) {
+        customPromptTextarea.value = response.defaultRules;
+        NotificationManager.success('Default AI rules restored. Click Save to apply.');
+      }
+    }
+  } catch (error) {
+    console.error('Error restoring default prompt:', error);
+    NotificationManager.error('Error restoring default rules');
   }
 }
 
