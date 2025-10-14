@@ -597,7 +597,8 @@ class BetterTabsAI {
         });
         pageContent = contentResult[0]?.result;
       } catch (error) {
-        console.log('Could not extract content from tab (restricted page or error):', error.message);
+        // Expected for Chrome system pages (chrome://, chrome-extension://, etc.)
+        // These pages are restricted and cannot be accessed by extensions
       }
 
       // Build prompt with available context
