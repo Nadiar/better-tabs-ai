@@ -5,7 +5,7 @@ import SortableTabCard from './SortableTabCard';
 
 
 // Ungrouped Tabs Column - Droppable area for ungrouped tabs
-function UngroupedColumn({ tabs, duplicateTabs, suggestions, onFindGroup, selectedTabs, onSelectTab }) {
+const UngroupedColumn = React.memo(function UngroupedColumn({ tabs, duplicateTabs, suggestions, onFindGroup, selectedTabs, onSelectTab }) {
   // Memoize filtered tabs to avoid recalculating on every render
   const ungroupedTabs = useMemo(() => {
     // Get all tab IDs that are in suggestions
@@ -58,6 +58,6 @@ function UngroupedColumn({ tabs, duplicateTabs, suggestions, onFindGroup, select
       </SortableContext>
     </div>
   );
-}
+});
 
 export default UngroupedColumn;

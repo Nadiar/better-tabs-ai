@@ -1,5 +1,5 @@
 // Better Tabs AI - Full Interface Main App
-import React, { useState, useEffect, createContext, useContext, useRef } from 'react';
+import React, { useState, useEffect, createContext, useContext, useRef, useCallback } from 'react';
 import ReactDOM from 'react-dom/client';
 import ErrorBoundary from './components/ErrorBoundary';
 import LoadingState from './components/LoadingState';
@@ -736,7 +736,7 @@ function App() {
     setSearchTerm(term);
   };
 
-  const handleSelectTab = (tabId: number, event: React.MouseEvent) => {
+  const handleSelectTab = useCallback((tabId: number, event: React.MouseEvent) => {
     if (event.ctrlKey || event.metaKey) {
       // Multi-select with Ctrl/Cmd
       setSelectedTabs(prev =>
@@ -746,9 +746,9 @@ function App() {
       // Single select
       setSelectedTabs([tabId]);
     }
-  };
+  }, []);
 
-  const handleFindGroup = async (tabId: number, event: React.MouseEvent) => {
+  const handleFindGroup = useCallback(async (tabId: number, event: React.MouseEvent) => {
     const tabsToFind = event.ctrlKey || event.metaKey ? selectedTabs : [tabId];
 
     if (tabsToFind.length === 0) {
@@ -809,7 +809,7 @@ function App() {
       console.error('Error finding group:', error);
       NotificationManager.error('Failed to find group');
     }
-  };
+  }, [selectedTabs, stagedState.tabs, stagedState.groups, suggestions, updateStaged]);
 
   // Keyboard shortcuts for undo/redo
   useEffect(() => {

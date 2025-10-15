@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { DndContext, DragOverlay, PointerSensor, useSensor, useSensors, closestCenter } from '@dnd-kit/core';
+import { DndContext, DragOverlay, PointerSensor, useSensor, useSensors, closestCenter, pointerWithin } from '@dnd-kit/core';
 import { useStagedStateContext } from '../app';
 import Header from './Header';
 import ConflictBanner from './ConflictBanner';
@@ -38,6 +38,13 @@ function Layout() {
       },
     })
   );
+
+  // Optimize collision detection for large tab counts
+  const collisionDetectionStrategy = useMemo(() => {
+    // For 50+ tabs, use pointerWithin for better performance
+    // For < 50 tabs, use closestCenter for better UX (more forgiving)
+    return stagedState.tabs.length >= 50 ? pointerWithin : closestCenter;
+  }, [stagedState.tabs.length]);
 
   const handleApply = async () => {
     await applyChanges();
@@ -195,17 +202,10 @@ function Layout() {
     }
   };
 
-  // Memoize columns to prevent unnecessary re-renders during drag
-  const memoizedColumns = useMemo(() => ({
-    ungrouped: <UngroupedColumn tabs={filteredTabs} duplicateTabs={duplicateTabs} suggestions={suggestions} onFindGroup={handleFindGroup} selectedTabs={selectedTabs} onSelectTab={handleSelectTab} />,
-    groups: <GroupsColumn groups={stagedState.groups} tabs={filteredTabs} suggestions={suggestions} duplicateTabs={duplicateTabs} />,
-    newGroup: <NewGroupBox />
-  }), [filteredTabs, stagedState.groups, suggestions, duplicateTabs, handleFindGroup, selectedTabs, handleSelectTab]);
-
   return (
     <DndContext
       sensors={sensors}
-      collisionDetection={closestCenter}
+      collisionDetection={collisionDetectionStrategy}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
@@ -240,9 +240,21 @@ function Layout() {
 
         <main className="main-content">
           <div className="three-column-grid">
-            {memoizedColumns.ungrouped}
-            {memoizedColumns.groups}
-            {memoizedColumns.newGroup}
+            <UngroupedColumn
+              tabs={filteredTabs}
+              duplicateTabs={duplicateTabs}
+              suggestions={suggestions}
+              onFindGroup={handleFindGroup}
+              selectedTabs={selectedTabs}
+              onSelectTab={handleSelectTab}
+            />
+            <GroupsColumn
+              groups={stagedState.groups}
+              tabs={filteredTabs}
+              suggestions={suggestions}
+              duplicateTabs={duplicateTabs}
+            />
+            <NewGroupBox />
           </div>
         </main>
 
