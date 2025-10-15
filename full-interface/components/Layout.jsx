@@ -60,26 +60,40 @@ function Layout() {
   };
 
   const handleDragStart = (event) => {
-    const draggedTabId = parseInt(event.active.id.replace('tab-', ''));
+    const draggedTabId = parseInt(event.active.id.replace('tab-', ''), 10);
+    if (isNaN(draggedTabId)) {
+      console.error('Invalid tab ID format in drag start:', event.active.id);
+      return;
+    }
     const tab = stagedState.tabs.find(t => t.id === draggedTabId);
     setActiveTab(tab);
   };
 
   const handleDragEnd = (event) => {
-    const { active, over } = event;
+    try {
+      const { active, over } = event;
 
-    setActiveTab(null); // Clear active tab
+      setActiveTab(null); // Clear active tab
 
-    if (!over) return;
+      if (!over) return;
 
-    const draggedTabId = parseInt(active.id.replace('tab-', ''));
-    const dropTarget = over.id;
+      const draggedTabId = parseInt(active.id.replace('tab-', ''), 10);
+      if (isNaN(draggedTabId)) {
+        console.error('Invalid tab ID format in drag end:', active.id);
+        return;
+      }
 
-    console.log('Drag end:', { draggedTabId, dropTarget, activeId: active.id, overId: over.id });
+      const dropTarget = over.id;
 
-    // Reordering within same group (sortable)
-    if (dropTarget.startsWith('tab-')) {
-      const overTabId = parseInt(dropTarget.replace('tab-', ''));
+      console.log('Drag end:', { draggedTabId, dropTarget, activeId: active.id, overId: over.id });
+
+      // Reordering within same group (sortable)
+      if (dropTarget.startsWith('tab-')) {
+        const overTabId = parseInt(dropTarget.replace('tab-', ''), 10);
+        if (isNaN(overTabId)) {
+          console.error('Invalid over tab ID format:', dropTarget);
+          return;
+        }
 
       updateStaged((draft) => {
         const draggedTabIndex = draft.tabs.findIndex(t => t.id === draggedTabId);
@@ -101,10 +115,9 @@ function Layout() {
           // Insert at new position
           draft.tabs.splice(newOverIndex, 0, removed);
 
-          // Update all tab indices to match their position
-          draft.tabs.forEach((tab, idx) => {
-            tab.index = idx;
-          });
+          // Note: We do NOT manually update tab.index here
+          // Chrome manages tab indices automatically when we apply changes
+          // The tabs array order is just for our UI representation
 
           console.log('Reordered tabs:', { draggedTabId, overTabId, from: draggedTabIndex, to: overTabIndex });
         }
@@ -112,7 +125,11 @@ function Layout() {
     }
     // Tab dropped on a group
     else if (dropTarget.startsWith('group-')) {
-      const groupId = parseInt(dropTarget.replace('group-', ''));
+      const groupId = parseInt(dropTarget.replace('group-', ''), 10);
+      if (isNaN(groupId)) {
+        console.error('Invalid group ID format:', dropTarget);
+        return;
+      }
 
       updateStaged((draft) => {
         const tab = draft.tabs.find(t => t.id === draggedTabId);
@@ -170,6 +187,11 @@ function Layout() {
           tab.groupId = -1;
         }
       });
+    }
+    } catch (error) {
+      console.error('Drag end error:', error);
+      // Ensure activeTab is always cleared even on error
+      setActiveTab(null);
     }
   };
 
@@ -231,9 +253,12 @@ function Layout() {
                 src={activeTab.favIconUrl || chrome.runtime.getURL('icons/icon16.png')}
                 alt=""
                 className="tab-favicon"
+                onError={(e) => {
+                  e.target.src = chrome.runtime.getURL('icons/icon16.png');
+                }}
               />
               <div className="tab-info">
-                <div className="tab-title">{activeTab.title}</div>
+                <div className="tab-title">{activeTab.title || 'Untitled'}</div>
               </div>
             </div>
           ) : null}
