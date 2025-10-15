@@ -7,15 +7,69 @@
 
 import { test, expect } from '@playwright/test';
 import { setupMockServer, resetMockServer, closeMockServer } from '../setup';
+import { createChromeMock, sampleDragDropData, sampleMultiGroupData } from '../helpers/chrome-mock-factory';
 
 // Setup MSW mocking for all tests
 test.beforeAll(() => setupMockServer());
 test.afterEach(() => resetMockServer());
 test.afterAll(() => closeMockServer());
 
-// Helper to inject Chrome API mock
-async function injectChromeMock(page: any) {
-  await page.addInitScript(() => {
+// Helper to perform manual drag for @dnd-kit compatibility
+async function performDrag(page: any, sourceLocator: any, targetLocator: any) {
+  const sourceBox = await sourceLocator.boundingBox();
+  const targetBox = await targetLocator.boundingBox();
+
+  if (sourceBox && targetBox) {
+    const startX = sourceBox.x + sourceBox.width / 2;
+    const startY = sourceBox.y + sourceBox.height / 2;
+    const endX = targetBox.x + targetBox.width / 2;
+    const endY = targetBox.y + targetBox.height / 2;
+
+    // Start drag
+    await page.mouse.move(startX, startY);
+    await page.mouse.down();
+    await page.waitForTimeout(50);
+
+    // Move slightly to activate drag (must exceed 8px activation constraint)
+    await page.mouse.move(startX + 10, startY + 10);
+    await page.waitForTimeout(100);
+
+    // Move to target
+    await page.mouse.move(endX, endY, { steps: 20 });
+    await page.waitForTimeout(200);
+
+    // Drop
+    await page.mouse.up();
+  }
+}
+
+// Helper to inject Chrome API mock using the factory
+async function injectChromeMock(page: any, tabs: any[], groups: any[], windows?: any[]) {
+  // Can't pass chromeMock as parameter - Playwright serialization strips functions
+  // Must define inline with data passed as parameters
+  await page.addInitScript(({ tabs, groups, windows }) => {
+    // Create windows with proper tab references
+    const mockWindows = windows || [{
+      id: 1,
+      tabs: tabs.map((tab: any, index: number) => ({
+        ...tab,
+        windowId: tab.windowId || 1,
+        index: tab.index !== undefined ? tab.index : index,
+        favIconUrl: tab.favIconUrl || `https://www.google.com/s2/favicons?domain=${new URL(tab.url).hostname}`
+      }))
+    }];
+
+    // Ensure all tabs have required fields
+    const fullTabs = tabs.map((tab: any, index: number) => ({
+      id: tab.id,
+      title: tab.title,
+      url: tab.url,
+      groupId: tab.groupId !== undefined ? tab.groupId : -1,
+      index: tab.index !== undefined ? tab.index : index,
+      windowId: tab.windowId || 1,
+      favIconUrl: tab.favIconUrl || `https://www.google.com/s2/favicons?domain=${new URL(tab.url).hostname}`
+    }));
+
     (window as any).chrome = {
       runtime: {
         sendMessage: async (msg: any) => {
@@ -53,16 +107,12 @@ async function injectChromeMock(page: any) {
         onMessage: { addListener: () => {}, removeListener: () => {} }
       },
       tabs: {
-        query: async () => [
-          { id: 1, title: 'Google', url: 'https://google.com', groupId: -1, index: 0 },
-          { id: 2, title: 'GitHub', url: 'https://github.com', groupId: -1, index: 1 },
-          { id: 3, title: 'Stack Overflow', url: 'https://stackoverflow.com', groupId: 1, index: 2 },
-          { id: 4, title: 'MDN Web Docs', url: 'https://developer.mozilla.org', groupId: 1, index: 3 }
-        ],
-        get: async () => null,
+        query: async () => fullTabs,
+        get: async (tabId: number) => fullTabs.find((t: any) => t.id === tabId) || null,
         group: async () => 1,
         ungroup: async () => {},
         remove: async () => {},
+        move: async () => {},
         onCreated: { addListener: () => {}, removeListener: () => {} },
         onRemoved: { addListener: () => {}, removeListener: () => {} },
         onUpdated: { addListener: () => {}, removeListener: () => {} },
@@ -70,9 +120,8 @@ async function injectChromeMock(page: any) {
       },
       tabGroups: {
         TAB_GROUP_ID_NONE: -1,
-        query: async () => [
-          { id: 1, title: 'Dev Resources', color: 'blue', collapsed: false }
-        ],
+        query: async () => groups,
+        get: async (groupId: number) => groups.find((g: any) => g.id === groupId) || null,
         update: async () => ({}),
         move: async () => {},
         onCreated: { addListener: () => {}, removeListener: () => {} },
@@ -80,18 +129,30 @@ async function injectChromeMock(page: any) {
         onUpdated: { addListener: () => {}, removeListener: () => {} },
         onMoved: { addListener: () => {}, removeListener: () => {} }
       },
-      windows: { getAll: async () => [{ id: 1, tabs: [] }] },
+      windows: {
+        getAll: async () => mockWindows,
+        get: async (windowId: number) => mockWindows.find((w: any) => w.id === windowId) || null
+      },
       storage: {
-        local: { get: async () => ({}), set: async () => {}, remove: async () => {} },
+        local: {
+          get: async () => ({}),
+          set: async () => {},
+          remove: async () => {}
+        },
+        sync: {
+          get: async () => ({}),
+          set: async () => {},
+          remove: async () => {}
+        },
         onChanged: { addListener: () => {}, removeListener: () => {} }
       }
     };
-  });
+  }, { tabs, groups, windows });
 }
 
 test.describe('Drag and Drop - Ungrouped to Group', () => {
   test.beforeEach(async ({ page }) => {
-    await injectChromeMock(page);
+    await injectChromeMock(page, sampleDragDropData.tabs, sampleDragDropData.groups);
     await page.goto('http://127.0.0.1:8080/full-interface/dist/index.html');
     await page.waitForTimeout(2000);
   });
@@ -116,10 +177,8 @@ test.describe('Drag and Drop - Ungrouped to Group', () => {
     const initialUngroupedCount = await page.locator('.ungrouped-column .tab-card').count();
     const initialGroupCount = await page.locator('.group-container .tab-card').count();
 
-    // Drag the tab from ungrouped to the group
-    await ungroupedTab.dragTo(groupContainer);
-
-    // Wait for state update
+    // Perform drag
+    await performDrag(page, ungroupedTab, groupContainer);
     await page.waitForTimeout(500);
 
     // Verify the tab moved
@@ -146,8 +205,8 @@ test.describe('Drag and Drop - Ungrouped to Group', () => {
     // Get initial group count
     const initialGroupCount = await page.locator('.group-container').count();
 
-    // Drag to New Group box
-    await ungroupedTab.dragTo(newGroupBox);
+    // Perform drag
+    await performDrag(page, ungroupedTab, newGroupBox);
     await page.waitForTimeout(500);
 
     // Should have created a new group
@@ -158,7 +217,7 @@ test.describe('Drag and Drop - Ungrouped to Group', () => {
 
 test.describe('Drag and Drop - Group to Ungrouped', () => {
   test.beforeEach(async ({ page }) => {
-    await injectChromeMock(page);
+    await injectChromeMock(page, sampleDragDropData.tabs, sampleDragDropData.groups);
     await page.goto('http://127.0.0.1:8080/full-interface/dist/index.html');
     await page.waitForTimeout(2000);
   });
@@ -178,8 +237,8 @@ test.describe('Drag and Drop - Group to Ungrouped', () => {
     const initialGroupCount = await page.locator('.group-container .tab-card').count();
     const initialUngroupedCount = await page.locator('.ungrouped-column .tab-card').count();
 
-    // Drag from group to ungrouped
-    await groupedTab.dragTo(ungroupedColumn);
+    // Perform drag
+    await performDrag(page, groupedTab, ungroupedColumn);
     await page.waitForTimeout(500);
 
     // Verify the tab moved
@@ -193,64 +252,8 @@ test.describe('Drag and Drop - Group to Ungrouped', () => {
 
 test.describe('Drag and Drop - Group to Group', () => {
   test.beforeEach(async ({ page }) => {
-    // Mock with multiple groups
-    await page.addInitScript(() => {
-      (window as any).chrome = {
-        runtime: {
-          sendMessage: async (msg: any) => {
-            if (msg.action === 'getSettings') {
-              return { settings: { minConfidenceThreshold: 0.5, minTabConfidence: 0.5, maxSuggestions: 10, showConfidenceScores: true, showInlineSuggestions: true, defaultGroupColor: 'grey', showAdvancedOptions: false } };
-            }
-            if (msg.action === 'checkAIAvailability') {
-              return { available: true, status: 'ready', statusMessage: 'AI is ready', capabilities: { analyze: true, generateNames: true } };
-            }
-            if (msg.action === 'getAnalysisProgress') {
-              return { status: 'idle', current: 0, total: 0 };
-            }
-            if (msg.action === 'getLastAnalysisResults') {
-              return { results: null, timestamp: null };
-            }
-            return { success: true, data: { available: true, status: 'ready' } };
-          },
-          getManifest: () => ({ version: '2.2.0' }),
-          getURL: (path: string) => `chrome-extension://mock/${path}`,
-          onMessage: { addListener: () => {}, removeListener: () => {} }
-        },
-        tabs: {
-          query: async () => [
-            { id: 1, title: 'Tab 1', url: 'https://example1.com', groupId: 1, index: 0 },
-            { id: 2, title: 'Tab 2', url: 'https://example2.com', groupId: 2, index: 1 }
-          ],
-          get: async () => null,
-          group: async () => 1,
-          ungroup: async () => {},
-          remove: async () => {},
-          onCreated: { addListener: () => {}, removeListener: () => {} },
-          onRemoved: { addListener: () => {}, removeListener: () => {} },
-          onUpdated: { addListener: () => {}, removeListener: () => {} },
-          onMoved: { addListener: () => {}, removeListener: () => {} }
-        },
-        tabGroups: {
-          TAB_GROUP_ID_NONE: -1,
-          query: async () => [
-            { id: 1, title: 'Group 1', color: 'blue', collapsed: false },
-            { id: 2, title: 'Group 2', color: 'red', collapsed: false }
-          ],
-          update: async () => ({}),
-          move: async () => {},
-          onCreated: { addListener: () => {}, removeListener: () => {} },
-          onRemoved: { addListener: () => {}, removeListener: () => {} },
-          onUpdated: { addListener: () => {}, removeListener: () => {} },
-          onMoved: { addListener: () => {}, removeListener: () => {} }
-        },
-        windows: { getAll: async () => [{ id: 1, tabs: [] }] },
-        storage: {
-          local: { get: async () => ({}), set: async () => {}, remove: async () => {} },
-          onChanged: { addListener: () => {}, removeListener: () => {} }
-        }
-      };
-    });
-
+    // Use multi-group sample data
+    await injectChromeMock(page, sampleMultiGroupData.tabs, sampleMultiGroupData.groups);
     await page.goto('http://127.0.0.1:8080/full-interface/dist/index.html');
     await page.waitForTimeout(2000);
   });
@@ -274,8 +277,8 @@ test.describe('Drag and Drop - Group to Group', () => {
     const initialFirstGroupCount = await page.locator('.group-container').nth(0).locator('.tab-card').count();
     const initialSecondGroupCount = await page.locator('.group-container').nth(1).locator('.tab-card').count();
 
-    // Drag from first group to second group
-    await firstGroupTab.dragTo(secondGroup);
+    // Perform drag
+    await performDrag(page, firstGroupTab, secondGroup);
     await page.waitForTimeout(500);
 
     // Verify counts changed
@@ -289,7 +292,7 @@ test.describe('Drag and Drop - Group to Group', () => {
 
 test.describe('Drag and Drop - Reordering', () => {
   test.beforeEach(async ({ page }) => {
-    await injectChromeMock(page);
+    await injectChromeMock(page, sampleDragDropData.tabs, sampleDragDropData.groups);
     await page.goto('http://127.0.0.1:8080/full-interface/dist/index.html');
     await page.waitForTimeout(2000);
   });
@@ -316,8 +319,8 @@ test.describe('Drag and Drop - Reordering', () => {
     const firstTabTitle = await firstTab.locator('.tab-title').textContent();
     const secondTabTitle = await secondTab.locator('.tab-title').textContent();
 
-    // Drag second tab to first position
-    await secondTab.dragTo(firstTab);
+    // Perform drag - drag second tab to first position
+    await performDrag(page, secondTab, firstTab);
     await page.waitForTimeout(500);
 
     // Verify order changed

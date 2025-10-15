@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { useDroppable } from '@dnd-kit/core';
-import TabCard from './TabCard';
+import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import SortableTabCard from './SortableTabCard';
 
 
 // Ungrouped Tabs Column - Droppable area for ungrouped tabs
@@ -32,24 +33,29 @@ function UngroupedColumn({ tabs, duplicateTabs, suggestions, onFindGroup, select
         <span className="count-badge">{ungroupedTabs.length}</span>
       </div>
 
-      <div className="column-content">
-        {ungroupedTabs.length === 0 ? (
-          <div className="empty-state">
-            <p>🎉 All tabs are grouped!</p>
-          </div>
-        ) : (
-          ungroupedTabs.map(tab => (
-            <TabCard
-              key={tab.id}
-              tab={tab}
-              isDuplicate={duplicateTabs.includes(tab.id)}
-              onFindGroup={onFindGroup}
-              isSelected={selectedTabs && selectedTabs.includes(tab.id)}
-              onSelect={onSelectTab}
-            />
-          ))
-        )}
-      </div>
+      <SortableContext
+        items={ungroupedTabs.map(t => `tab-${t.id}`)}
+        strategy={verticalListSortingStrategy}
+      >
+        <div className="column-content">
+          {ungroupedTabs.length === 0 ? (
+            <div className="empty-state">
+              <p>🎉 All tabs are grouped!</p>
+            </div>
+          ) : (
+            ungroupedTabs.map(tab => (
+              <SortableTabCard
+                key={tab.id}
+                tab={tab}
+                isDuplicate={duplicateTabs.includes(tab.id)}
+                onFindGroup={onFindGroup}
+                isSelected={selectedTabs && selectedTabs.includes(tab.id)}
+                onSelect={onSelectTab}
+              />
+            ))
+          )}
+        </div>
+      </SortableContext>
     </div>
   );
 }

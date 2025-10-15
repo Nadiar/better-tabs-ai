@@ -3,7 +3,7 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
 // SortableTabCard - Wrapper for TabCard that makes it sortable within groups
-function SortableTabCard({ tab, isSelected, isDuplicate, onSelect }) {
+function SortableTabCard({ tab, isSelected, isDuplicate, onSelect, onFindGroup }) {
   const {
     attributes,
     listeners,
@@ -65,6 +65,18 @@ function SortableTabCard({ tab, isSelected, isDuplicate, onSelect }) {
       </div>
       {isDuplicate && (
         <span className="duplicate-badge">Duplicate</span>
+      )}
+      {onFindGroup && (
+        <button
+          className="btn-icon find-group-btn"
+          onClick={(e) => {
+            e.stopPropagation();
+            onFindGroup(tab.id, e);
+          }}
+          title="Find a group for this tab"
+        >
+          🔍
+        </button>
       )}
     </div>
   );
