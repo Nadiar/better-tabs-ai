@@ -22,6 +22,7 @@ import "./styles/main.css";
 import "./styles/layout.css";
 import "./styles/drag-drop.css";
 import "./styles/animations.css";
+import "./styles/progress-indicator.css";
 
 // Progress tracking types
 interface ApplyProgress {
@@ -33,7 +34,7 @@ interface ApplyProgress {
 interface AnalysisProgress {
   current: number;
   total: number;
-  status: 'idle' | 'analyzing' | 'complete' | 'error';
+  status: 'idle' | 'summarizing' | 'grouping' | 'complete' | 'error';
 }
 
 // State type

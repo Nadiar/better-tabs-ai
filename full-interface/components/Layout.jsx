@@ -3,6 +3,7 @@ import { DndContext, DragOverlay, PointerSensor, useSensor, useSensors, closestC
 import { useStagedStateContext } from '../app';
 import Header from './Header';
 import ConflictBanner from './ConflictBanner';
+import AnalysisProgressIndicator from './AnalysisProgressIndicator';
 import UngroupedColumn from './UngroupedColumn';
 import GroupsColumn from './GroupsColumn';
 import NewGroupBox from './NewGroupBox';
@@ -318,6 +319,12 @@ function Layout() {
             onIgnore={dismissConflictBanner}
           />
         )}
+
+        {/* Analysis Progress Indicator - Issue #23 */}
+        <AnalysisProgressIndicator
+          isAnalyzing={isAnalyzing}
+          progress={analysisProgress}
+        />
 
         <main className="main-content">
           <div className="three-column-grid">
