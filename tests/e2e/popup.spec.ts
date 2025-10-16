@@ -97,7 +97,7 @@ async function injectChromeMock(page: any) {
 test.describe('Popup Interface - Baseline Tests', () => {
   test.beforeEach(async ({ page }) => {
     await injectChromeMock(page);
-    await page.goto('http://127.0.0.1:8080/popup-react/dist/index.html');
+    await page.goto('http://127.0.0.1:8081/popup-react/dist/index.html');
     await page.waitForTimeout(1000);
   });
 
@@ -187,7 +187,7 @@ test.describe('Popup Interface - Baseline Tests', () => {
 test.describe('Popup Interface - Mock AI Interactions', () => {
   test.beforeEach(async ({ page }) => {
     await injectChromeMock(page);
-    await page.goto('http://127.0.0.1:8080/popup-react/dist/index.html');
+    await page.goto('http://127.0.0.1:8081/popup-react/dist/index.html');
     await page.waitForTimeout(1000);
   });
 
@@ -234,7 +234,7 @@ test.describe('Popup Interface - Mock AI Interactions', () => {
 test.describe('Popup Interface - Regression Tests', () => {
   test.beforeEach(async ({ page }) => {
     await injectChromeMock(page);
-    await page.goto('http://127.0.0.1:8080/popup-react/dist/index.html');
+    await page.goto('http://127.0.0.1:8081/popup-react/dist/index.html');
     await page.waitForTimeout(1000);
   });
 

@@ -97,7 +97,7 @@ async function injectChromeMock(page: any) {
 test.describe('Full Interface - Baseline Tests', () => {
   test.beforeEach(async ({ page }) => {
     await injectChromeMock(page);
-    await page.goto('http://127.0.0.1:8080/full-interface/dist/index.html');
+    await page.goto('http://127.0.0.1:8081/full-interface/dist/index.html');
     await page.waitForTimeout(1000);
   });
 
@@ -173,7 +173,7 @@ test.describe('Full Interface - Baseline Tests', () => {
 test.describe('Full Interface - Drag & Drop Baseline', () => {
   test.beforeEach(async ({ page }) => {
     await injectChromeMock(page);
-    await page.goto('http://127.0.0.1:8080/full-interface/dist/index.html');
+    await page.goto('http://127.0.0.1:8081/full-interface/dist/index.html');
     await page.waitForTimeout(1000);
   });
 
@@ -215,7 +215,7 @@ test.describe('Full Interface - Drag & Drop Baseline', () => {
 test.describe('Full Interface - AI Integration Baseline', () => {
   test.beforeEach(async ({ page }) => {
     await injectChromeMock(page);
-    await page.goto('http://127.0.0.1:8080/full-interface/dist/index.html');
+    await page.goto('http://127.0.0.1:8081/full-interface/dist/index.html');
     await page.waitForTimeout(1000);
   });
 
@@ -263,7 +263,7 @@ test.describe('Full Interface - AI Integration Baseline', () => {
 test.describe('Full Interface - Staged Changes Baseline', () => {
   test.beforeEach(async ({ page }) => {
     await injectChromeMock(page);
-    await page.goto('http://127.0.0.1:8080/full-interface/dist/index.html');
+    await page.goto('http://127.0.0.1:8081/full-interface/dist/index.html');
     await page.waitForTimeout(1000);
   });
 
@@ -319,7 +319,7 @@ test.describe('Full Interface - Regression Tests', () => {
       }
     });
 
-    await page.goto('http://127.0.0.1:8080/full-interface/dist/index.html');
+    await page.goto('http://127.0.0.1:8081/full-interface/dist/index.html');
     await page.waitForTimeout(1000);
 
     // Filter out expected Chrome extension errors and mock-related errors
@@ -335,7 +335,7 @@ test.describe('Full Interface - Regression Tests', () => {
   });
 
   test('should be responsive', async ({ page }) => {
-    await page.goto('http://127.0.0.1:8080/full-interface/dist/index.html');
+    await page.goto('http://127.0.0.1:8081/full-interface/dist/index.html');
 
     const appContainer = page.locator('.app-container');
     const box = await appContainer.boundingBox();

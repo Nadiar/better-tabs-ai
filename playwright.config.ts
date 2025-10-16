@@ -52,8 +52,8 @@ export default defineConfig({
   // Run a simple HTTP server to serve the built extension files
   // This is needed because ES modules don't load from file:// protocol
   webServer: {
-    command: 'npx http-server . -p 8080 --cors -c-1',
-    url: 'http://127.0.0.1:8080',
+    command: 'npx http-server . -p 8081 --cors -c-1',
+    url: 'http://127.0.0.1:8081',
     reuseExistingServer: !process.env.CI,
     timeout: 10000,
   },
