@@ -74,3 +74,29 @@
 .app-container[data-tab-count="100"] .new-group-box.drag-over {
   transform: none; /* Disable scale animation */
 }
+
+/* Drop Position Indicators - Issue #22 */
+.tab-card {
+  position: relative;
+}
+
+/* Visual feedback when hovering over tab halves */
+.tab-card[style*="border-left: 3px solid"] {
+  border-left-style: solid;
+  transition: border 0.15s ease, padding 0.15s ease;
+}
+
+.tab-card[style*="border-right: 3px solid"] {
+  border-right-style: solid;
+  transition: border 0.15s ease, padding 0.15s ease;
+}
+
+/* Enhanced drop feedback with animation */
+@keyframes drop-indicator-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(102, 126, 234, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
+  }
+}

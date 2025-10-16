@@ -6,7 +6,7 @@ import SortableTabCard from './SortableTabCard';
 
 
 // Group Container - Droppable container for tab groups with sortable tabs
-function GroupContainer({ group, tabs, isSuggested = false, confidence = null, duplicateTabs = [] }) {
+function GroupContainer({ group, tabs, isSuggested = false, confidence = null, duplicateTabs = [], activeDropTarget, dropPosition }) {
   const groupTabs = tabs.filter(tab => tab.groupId === group.id);
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState(group.title || '');
@@ -228,9 +228,19 @@ function GroupContainer({ group, tabs, isSuggested = false, confidence = null, d
               <p>Drop tabs here</p>
             </div>
           ) : (
-            groupTabs.map(tab => (
-              <SortableTabCard key={tab.id} tab={tab} isDuplicate={duplicateTabs.includes(tab.id)} />
-            ))
+            groupTabs.map(tab => {
+              const tabId = `tab-${tab.id}`;
+              const isDropTarget = activeDropTarget === tabId;
+              return (
+                <SortableTabCard
+                  key={tab.id}
+                  tab={tab}
+                  isDuplicate={duplicateTabs.includes(tab.id)}
+                  isDropTarget={isDropTarget}
+                  dropPosition={isDropTarget ? dropPosition : null}
+                />
+              );
+            })
           )}
         </div>
       </SortableContext>

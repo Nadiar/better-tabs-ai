@@ -15,6 +15,8 @@ import ProgressBar from './ProgressBar';
 function Layout() {
   const { stagedState, hasChanges, showConflictBanner, isApplying, isAnalyzing, analysisProgress, applyProgress, toasts, suggestions, searchTerm, duplicateTabs, showAdvancedOptions, selectedTabs, undoRedo, resetToOriginal, applyChanges, analyzeTabs, clearCache, copyDebugInfo, refreshFromChrome, updateStaged, dismissConflictBanner, handleSearchChange, handleSelectTab, handleFindGroup } = useStagedStateContext();
   const [activeTab, setActiveTab] = useState(null);
+  const [activeDropTarget, setActiveDropTarget] = useState(null);
+  const [dropPosition, setDropPosition] = useState(null); // 'before' | 'after' | null
 
   // Filter tabs based on search term
   const filteredTabs = useMemo(() => {
@@ -76,11 +78,59 @@ function Layout() {
     setActiveTab(tab);
   };
 
+  const handleDragOver = (event) => {
+    const { over, activatorEvent } = event;
+
+    if (!over || !over.id) {
+      setActiveDropTarget(null);
+      setDropPosition(null);
+      return;
+    }
+
+    const overId = over.id.toString();
+
+    // Only calculate position for tab-to-tab drops
+    if (overId.startsWith('tab-')) {
+      const overElement = document.querySelector(`[data-sortable-id="${overId}"]`);
+
+      if (!overElement || !activatorEvent) {
+        setActiveDropTarget(null);
+        setDropPosition(null);
+        return;
+      }
+
+      const rect = overElement.getBoundingClientRect();
+
+      // Get pointer position - handle both pointer and touch events
+      const clientX = activatorEvent.clientX || (activatorEvent.touches && activatorEvent.touches[0]?.clientX);
+
+      if (clientX === undefined) {
+        setActiveDropTarget(null);
+        setDropPosition(null);
+        return;
+      }
+
+      // Calculate which half (left = before, right = after)
+      const midpoint = rect.left + rect.width / 2;
+      const position = clientX < midpoint ? 'before' : 'after';
+
+      setActiveDropTarget(overId);
+      setDropPosition(position);
+    } else {
+      // Dropping on group or other container - no position needed
+      setActiveDropTarget(null);
+      setDropPosition(null);
+    }
+  };
+
   const handleDragEnd = (event) => {
     try {
       const { active, over } = event;
 
-      setActiveTab(null); // Clear active tab
+      // Clear all drag state
+      setActiveTab(null);
+      setActiveDropTarget(null);
+      setDropPosition(null);
 
       if (!over) return;
 
@@ -94,7 +144,7 @@ function Layout() {
 
       console.log('Drag end:', { draggedTabId, dropTarget, activeId: active.id, overId: over.id });
 
-      // Reordering within same group (sortable)
+      // Reordering within same group (sortable) or moving to different group with position
       if (dropTarget.startsWith('tab-')) {
         const overTabId = parseInt(dropTarget.replace('tab-', ''), 10);
         if (isNaN(overTabId)) {
@@ -111,22 +161,45 @@ function Layout() {
         const draggedTab = draft.tabs[draggedTabIndex];
         const overTab = draft.tabs[overTabIndex];
 
-        // Only reorder if in same group
-        if (draggedTab.groupId === overTab.groupId && draggedTabIndex !== overTabIndex) {
+        // Check if moving to different group
+        const isDifferentGroup = draggedTab.groupId !== overTab.groupId;
+
+        if (isDifferentGroup) {
+          // Move to target group
+          draggedTab.groupId = overTab.groupId;
+        }
+
+        // Only reorder if:
+        // - Moving to different group, OR
+        // - In same group but different position
+        if (isDifferentGroup || draggedTabIndex !== overTabIndex) {
           // Remove dragged tab from array
           const [removed] = draft.tabs.splice(draggedTabIndex, 1);
 
           // Find new position (index may have shifted after removal)
-          const newOverIndex = draft.tabs.findIndex(t => t.id === overTabId);
+          let newOverIndex = draft.tabs.findIndex(t => t.id === overTabId);
 
-          // Insert at new position
+          // Adjust insertion index based on drop position (before/after)
+          // dropPosition is captured from handleDragOver
+          if (dropPosition === 'after' && newOverIndex >= 0) {
+            newOverIndex += 1;
+          }
+
+          // Insert at calculated position
           draft.tabs.splice(newOverIndex, 0, removed);
 
           // Note: We do NOT manually update tab.index here
           // Chrome manages tab indices automatically when we apply changes
           // The tabs array order is just for our UI representation
 
-          console.log('Reordered tabs:', { draggedTabId, overTabId, from: draggedTabIndex, to: overTabIndex });
+          console.log('Reordered tabs:', {
+            draggedTabId,
+            overTabId,
+            from: draggedTabIndex,
+            to: newOverIndex,
+            position: dropPosition,
+            movedGroup: isDifferentGroup
+          });
         }
       });
     }
@@ -202,12 +275,20 @@ function Layout() {
     }
   };
 
+  const handleDragCancel = () => {
+    setActiveTab(null);
+    setActiveDropTarget(null);
+    setDropPosition(null);
+  };
+
   return (
     <DndContext
       sensors={sensors}
       collisionDetection={collisionDetectionStrategy}
       onDragStart={handleDragStart}
+      onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
+      onDragCancel={handleDragCancel}
     >
       <div
         className="app-container"
@@ -253,6 +334,8 @@ function Layout() {
               tabs={filteredTabs}
               suggestions={suggestions}
               duplicateTabs={duplicateTabs}
+              activeDropTarget={activeDropTarget}
+              dropPosition={dropPosition}
             />
             <NewGroupBox />
           </div>

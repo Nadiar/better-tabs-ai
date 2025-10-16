@@ -3,7 +3,7 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
 // SortableTabCard - Wrapper for TabCard that makes it sortable within groups
-function SortableTabCard({ tab, isSelected, isDuplicate, onSelect, onFindGroup }) {
+function SortableTabCard({ tab, isSelected, isDuplicate, onSelect, onFindGroup, isDropTarget, dropPosition }) {
   const {
     attributes,
     listeners,
@@ -20,7 +20,16 @@ function SortableTabCard({ tab, isSelected, isDuplicate, onSelect, onFindGroup }
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.3 : 1,
-    cursor: isDragging ? 'grabbing' : 'grab'
+    cursor: isDragging ? 'grabbing' : 'grab',
+    // Add drop target visual feedback
+    ...(isDropTarget && dropPosition === 'before' && {
+      borderLeft: '3px solid var(--primary-color)',
+      paddingLeft: 'calc(0.6rem - 2px)'
+    }),
+    ...(isDropTarget && dropPosition === 'after' && {
+      borderRight: '3px solid var(--primary-color)',
+      paddingRight: 'calc(0.6rem - 2px)'
+    })
   };
 
   const getFaviconUrl = (tab) => {
@@ -47,6 +56,7 @@ function SortableTabCard({ tab, isSelected, isDuplicate, onSelect, onFindGroup }
       style={style}
       {...attributes}
       {...listeners}
+      data-sortable-id={`tab-${tab.id}`}
       className={`tab-card ${isSelected ? 'selected' : ''} ${isDuplicate ? 'duplicate' : ''} ${isDragging ? 'dragging' : ''}`}
       onClick={(e) => onSelect && onSelect(tab.id, e)}
       title={`${tab.title}\n${tab.url}`}
