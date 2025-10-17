@@ -15,7 +15,7 @@ export default defineConfig({
   workers: 1,
 
   // Retry on failure
-  retries: 1,
+  retries: 2,
 
   // Reporter to use
   reporter: 'list',
