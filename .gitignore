@@ -68,8 +68,8 @@ web-ext-artifacts/
 !README.md
 !CHANGELOG.md
 !DEVELOPMENT.md
+!copilot-prompt-template.md
 
-# Refactor planning documents (temporary working files)
 REFACTOR_PLAN.md
 REFACTOR_DECISIONS.md
 TEST_RESULTS.md
@@ -91,3 +91,6 @@ performance_test_results.txt
 
 # Development artifacts
 *.orig
+
+# Explicitly allow copilot-prompt-template.md
+!copilot-prompt-template.md
