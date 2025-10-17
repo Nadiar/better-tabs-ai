@@ -691,6 +691,11 @@ Examples:
       return false;
     }
 
+    // Skip Google Keep - personal notes shouldn't be grouped by content
+    if (url.includes('keep.google.com')) {
+      return false;
+    }
+
     // Skip PDF viewer extension pages
     if (url.includes('chrome-extension://') && url.includes('.pdf')) {
       return false;
