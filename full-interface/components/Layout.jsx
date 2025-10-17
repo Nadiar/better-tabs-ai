@@ -191,39 +191,6 @@ function Layout() {
 
       console.log('Drag end:', { draggedTabId, dropTarget, activeId: active.id, overId: over.id });
 
-      // Check if tab is being moved FROM a suggestion
-      let wasInSuggestion = false;
-      if (suggestions) {
-        suggestions.forEach((suggestion, index) => {
-          if (suggestion.tabIds.includes(draggedTabId)) {
-            wasInSuggestion = true;
-            // Tab was in this suggestion - remove it unless staying in same suggestion
-            if (!dropTarget.startsWith('suggestion-') || parseInt(dropTarget.replace('suggestion-', ''), 10) !== index) {
-              const updatedSuggestions = [...suggestions];
-              updatedSuggestions[index] = {
-                ...suggestion,
-                tabIds: suggestion.tabIds.filter(id => id !== draggedTabId)
-              };
-              window.dispatchEvent(new CustomEvent('updateSuggestions', {
-                detail: { suggestions: updatedSuggestions }
-              }));
-            }
-          }
-        });
-      }
-
-      // If tab was in a suggestion (groupId === -999) and is being moved to a real target,
-      // it needs to get a proper groupId based on the drop target
-      if (wasInSuggestion && !dropTarget.startsWith('suggestion-')) {
-        updateStaged((draft) => {
-          const tab = draft.tabs.find(t => t.id === draggedTabId);
-          if (tab && tab.groupId === -999) {
-            // Default to ungrouped unless the drop target specifies otherwise
-            // The specific drop handlers below will set the correct groupId
-            tab.groupId = -1;
-          }
-        });
-      }
 
       // Reordering within same group (sortable) or moving to different group with position
       if (dropTarget.startsWith('tab-')) {
@@ -298,41 +265,6 @@ function Layout() {
           tab.groupId = groupId;
         }
       });
-    }
-    // Tab dropped on a suggested group
-    else if (dropTarget.startsWith('suggestion-')) {
-      const suggestionIndex = parseInt(dropTarget.replace('suggestion-', ''), 10);
-      if (isNaN(suggestionIndex) || !suggestions || !suggestions[suggestionIndex]) {
-        console.error('Invalid suggestion index:', dropTarget);
-        return;
-      }
-
-      // Add tab to suggestion's tabIds
-      const suggestion = suggestions[suggestionIndex];
-      if (!suggestion.tabIds.includes(draggedTabId)) {
-        // Update the suggestions array to include this tab
-        const updatedSuggestions = [...suggestions];
-        updatedSuggestions[suggestionIndex] = {
-          ...suggestion,
-          tabIds: [...suggestion.tabIds, draggedTabId]
-        };
-
-        // Dispatch event to update suggestions in app.tsx
-        window.dispatchEvent(new CustomEvent('updateSuggestions', {
-          detail: { suggestions: updatedSuggestions }
-        }));
-
-        // Remove tab from its current group so it ONLY appears in the suggestion
-        // Use a special groupId to mark it as "in suggestion"
-        updateStaged((draft) => {
-          const tab = draft.tabs.find(t => t.id === draggedTabId);
-          if (tab) {
-            // Use -999 as a special marker for "tab is in a suggestion"
-            // This prevents it from showing in regular groups or ungrouped
-            tab.groupId = -999;
-          }
-        });
-      }
     }
     // Tab dropped on "New Group" box
     else if (dropTarget === 'new-group-box') {

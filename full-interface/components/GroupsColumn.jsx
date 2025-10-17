@@ -1,144 +1,62 @@
-import React, { useMemo, useCallback } from 'react';
+import React from 'react';
 import GroupContainer from './GroupContainer';
-import SuggestedGroup from './SuggestedGroup';
 import { useStagedStateContext } from '../app';
 
-
-// Groups Column - Center column showing existing groups and AI suggestions
-function GroupsColumn({ groups, tabs, suggestions, duplicateTabs = [], activeDropTarget, dropPosition }) {
+// Groups Column - Center column showing all groups (both regular and suggested)
+function GroupsColumn({ groups, tabs, duplicateTabs = [], activeDropTarget, dropPosition }) {
   const { updateStaged } = useStagedStateContext();
 
-  // Mix suggestions with existing groups (suggestions displayed first)
-  // Memoize to avoid recalculating on every render
-  const items = useMemo(() => {
-    const result = [];
+  // Separate ephemeral (suggested) groups from regular groups
+  const suggestedGroups = groups.filter(g => g.isSuggested);
+  const regularGroups = groups.filter(g => !g.isSuggested);
 
-  // Add suggestions first
-  if (suggestions && suggestions.length > 0) {
-    suggestions.forEach((suggestion, index) => {
-      result.push({
-        type: 'suggestion',
-        key: `suggestion-${index}`,
-        data: suggestion,
-        index
-      });
-    });
-  }
+  // Display suggested groups first, then regular groups
+  const allGroups = [...suggestedGroups, ...regularGroups];
 
-  // Add existing groups
-  groups.forEach(group => {
-    result.push({
-      type: 'group',
-      key: `group-${group.id}`,
-      data: group
-    });
-  });
-
-    return result;
-  }, [groups, suggestions]);
-
-  const handleCreateSuggestion = useCallback((suggestion, index) => {
-    if (!suggestion.tabIds || suggestion.tabIds.length === 0) {
-      console.warn('Cannot create group: no tabIds in suggestion', suggestion);
-      return;
-    }
-
-    console.log('Creating group from suggestion:', suggestion);
-
+  const handleDismissGroup = (groupId) => {
+    // Remove the ephemeral group
     updateStaged((draft) => {
-      // Generate new group ID
-      const newGroupId = Math.min(...draft.groups.map(g => g.id), -1) - 1;
-
-      // Create new group
-      const newGroup = {
-        id: newGroupId,
-        title: suggestion.groupName,
-        color: suggestion.color || 'grey',
-        collapsed: false
-      };
-      draft.groups.push(newGroup);
-
-      // Move suggested tabs to new group
-      let movedCount = 0;
-      suggestion.tabIds.forEach(tabId => {
-        const tab = draft.tabs.find(t => t.id === tabId);
-        if (tab) {
-          tab.groupId = newGroupId;
-          movedCount++;
+      // Ungroup all tabs in this group
+      draft.tabs.forEach(tab => {
+        if (tab.groupId === groupId) {
+          tab.groupId = -1; // Move to ungrouped
         }
       });
-
-      console.log(`Moved ${movedCount} tabs to new group "${suggestion.groupName}"`);
+      // Remove the group
+      draft.groups = draft.groups.filter(g => g.id !== groupId);
     });
-
-    // Remove suggestion from list
-    window.dispatchEvent(new CustomEvent('dismissSuggestion', { detail: { index } }));
-  }, [updateStaged]);
-
-  const handleDismissSuggestion = useCallback((index) => {
-    window.dispatchEvent(new CustomEvent('dismissSuggestion', { detail: { index } }));
-  }, []);
-
-  const handleRegenerateName = useCallback((suggestionIndex, newName) => {
-    // Update suggestion name
-    const updatedSuggestions = [...suggestions];
-    updatedSuggestions[suggestionIndex] = {
-      ...updatedSuggestions[suggestionIndex],
-      groupName: newName
-    };
-    window.dispatchEvent(new CustomEvent('updateSuggestions', {
-      detail: { suggestions: updatedSuggestions }
-    }));
-  }, [suggestions]);
+  };
 
   return (
     <div className="column groups-column">
       <div className="column-header">
         <h2>Tab Groups</h2>
-        <span className="count-badge">{groups.length}</span>
-        {suggestions && suggestions.length > 0 && (
+        <span className="count-badge">{regularGroups.length}</span>
+        {suggestedGroups.length > 0 && (
           <span className="suggestions-badge" title="AI suggestions available">
-            {suggestions.length} 💡
+            {suggestedGroups.length} 💡
           </span>
         )}
       </div>
 
       <div className="column-content">
-        {items.length === 0 ? (
+        {allGroups.length === 0 ? (
           <div className="empty-state">
             <p>No groups yet</p>
             <small>Drag tabs to "New Group" to create one</small>
           </div>
         ) : (
-          items.map(item => {
-            if (item.type === 'suggestion') {
-              return (
-                <SuggestedGroup
-                  key={item.key}
-                  suggestion={item.data}
-                  suggestionIndex={item.index}
-                  tabs={tabs}
-                  duplicateTabs={duplicateTabs}
-                  activeDropTarget={activeDropTarget}
-                  dropPosition={dropPosition}
-                  onCreate={() => handleCreateSuggestion(item.data, item.index)}
-                  onDismiss={() => handleDismissSuggestion(item.index)}
-                  onRegenerateName={handleRegenerateName}
-                />
-              );
-            } else {
-              return (
-                <GroupContainer
-                  key={item.key}
-                  group={item.data}
-                  tabs={tabs}
-                  duplicateTabs={duplicateTabs}
-                  activeDropTarget={activeDropTarget}
-                  dropPosition={dropPosition}
-                />
-              );
-            }
-          })
+          allGroups.map(group => (
+            <GroupContainer
+              key={`group-${group.id}`}
+              group={group}
+              tabs={tabs}
+              duplicateTabs={duplicateTabs}
+              activeDropTarget={activeDropTarget}
+              dropPosition={dropPosition}
+              onDismiss={group.isSuggested ? () => handleDismissGroup(group.id) : null}
+            />
+          ))
         )}
       </div>
     </div>

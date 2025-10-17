@@ -218,7 +218,7 @@ function App() {
     const handleMessage = (message: any) => {
       if (message.action === 'analysisComplete') {
         if (message.results && message.results.suggestions) {
-          setSuggestions(message.results.suggestions);
+          setSuggestionsAndConvert(message.results.suggestions);
           NotificationManager.success(`Analysis complete! Found ${message.results.suggestions.length} grouping suggestions`);
         }
         setIsAnalyzing(false);
@@ -236,7 +236,7 @@ function App() {
       if (areaName === 'local' && changes.lastAnalysisResults) {
         const newResults = changes.lastAnalysisResults.newValue;
         if (newResults && newResults.suggestions) {
-          setSuggestions(newResults.suggestions);
+          setSuggestionsAndConvert(newResults.suggestions);
           setIsAnalyzing(false);
           setAnalysisProgress({ current: 0, total: 0, status: 'idle' });
           NotificationManager.success(`Analysis complete! Found ${newResults.suggestions.length} grouping suggestions`);
@@ -259,7 +259,7 @@ function App() {
     try {
       const response = await chrome.runtime.sendMessage({ action: 'getLastAnalysisResults' });
       if (response.results && response.results.suggestions) {
-        setSuggestions(response.results.suggestions);
+        setSuggestionsAndConvert(response.results.suggestions);
       }
     } catch (error) {
       console.error('Failed to load suggestions:', error);
@@ -513,12 +513,12 @@ function App() {
           title: suggestion.groupName,
           color: suggestion.color || 'grey',
           collapsed: false,
-          isSuggested: true,  // Mark as AI-suggested
+          isSuggested: true,  // Mark as AI-suggested (ephemeral)
           confidence: suggestion.confidence
         };
         draft.groups.push(newGroup);
 
-        // Move tabs into this group
+        // Move tabs into this group with NORMAL groupId (not -999!)
         let movedCount = 0;
         if (suggestion.tabIds && Array.isArray(suggestion.tabIds)) {
           suggestion.tabIds.forEach(tabId => {
@@ -527,7 +527,7 @@ function App() {
               console.warn(`❌ Tab ${tabId} not found in draft.tabs`);
             } else {
               console.log(`✓ Found tab ${tabId}: ${tab.title}`);
-              tab.groupId = newGroupId;
+              tab.groupId = newGroupId;  // Normal groupId - tabs behave identically!
               movedCount++;
             }
           });
@@ -538,6 +538,14 @@ function App() {
     });
 
     NotificationManager.success(`Created ${newSuggestions.length} suggested groups - drag tabs to adjust`);
+  };
+
+  // Helper: Set suggestions AND immediately convert to ephemeral groups
+  const setSuggestionsAndConvert = (newSuggestions: AISuggestion[] | null) => {
+    setSuggestions(newSuggestions);
+    if (newSuggestions && newSuggestions.length > 0) {
+      applySuggestionsToStaged(newSuggestions);
+    }
   };
 
   const clearCache = async () => {
@@ -633,14 +641,14 @@ function App() {
           if (refreshResult.started) {
             pollForAnalysisResults();
           } else if (refreshResult.suggestions) {
-            setSuggestions(refreshResult.suggestions);
+            setSuggestionsAndConvert(refreshResult.suggestions);
             NotificationManager.success(`Found ${refreshResult.suggestions.length} grouping suggestions`);
             setIsAnalyzing(false);
           }
         } else {
           // First click - use cached results
           const cachedSuggestions = result.data.suggestions || [];
-          setSuggestions(cachedSuggestions);
+          setSuggestionsAndConvert(cachedSuggestions);
           NotificationManager.success((result.data as any).message || 'Analysis complete (cached)' + ' - Click again to force refresh');
           setIsAnalyzing(false);
         }
@@ -654,7 +662,7 @@ function App() {
         // Immediate results
         console.log('✅ Immediate results, suggestions:', result.data.suggestions);
         setLastAnalysisClick(Date.now());
-        setSuggestions(result.data.suggestions);
+        setSuggestionsAndConvert(result.data.suggestions);
         NotificationManager.success(`Found ${result.data.suggestions.length} grouping suggestions`);
         setIsAnalyzing(false);
       }
@@ -695,7 +703,7 @@ function App() {
 
           if (resultsResponse.success && resultsResponse.results && resultsResponse.results.suggestions) {
             console.log(`✅ Setting ${resultsResponse.results.suggestions.length} suggestions:`, resultsResponse.results.suggestions);
-            setSuggestions(resultsResponse.results.suggestions);
+            setSuggestionsAndConvert(resultsResponse.results.suggestions);
             NotificationManager.success(`Analysis complete! Found ${resultsResponse.results.suggestions.length} grouping suggestions`);
           } else {
             console.warn('⚠️ No suggestions in resultsResponse:', resultsResponse);

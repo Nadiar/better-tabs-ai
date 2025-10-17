@@ -6,7 +6,7 @@ import SortableTabCard from './SortableTabCard';
 
 
 // Group Container - Droppable container for tab groups with sortable tabs
-function GroupContainer({ group, tabs, isSuggested = false, confidence = null, duplicateTabs = [], activeDropTarget, dropPosition }) {
+function GroupContainer({ group, tabs, duplicateTabs = [], activeDropTarget, dropPosition, onDismiss = null }) {
   const groupTabs = tabs.filter(tab => tab.groupId === group.id);
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState(group.title || '');
@@ -21,7 +21,7 @@ function GroupContainer({ group, tabs, isSuggested = false, confidence = null, d
   });
 
   const handleTitleClick = () => {
-    if (!isSuggested) {
+    if (!group.isSuggested) {
       setIsEditing(true);
       setEditValue(group.title || '');
       setTimeout(() => inputRef.current?.focus(), 0);
@@ -131,13 +131,13 @@ function GroupContainer({ group, tabs, isSuggested = false, confidence = null, d
   return (
     <div
       ref={setNodeRef}
-      className={`group-container ${isSuggested ? 'suggested' : ''} ${isOver ? 'drag-over' : ''}`}
+      className={`group-container ${group.isSuggested ? 'suggested' : ''} ${isOver ? 'drag-over' : ''}`}
       style={{ borderLeftColor: getGroupColor(group.color) }}
     >
       <div className="group-header" style={{ backgroundColor: getGroupColor(group.color) + '20' }}>
         <div className="group-title-section">
           {/* Color swatch */}
-          {!isSuggested && (
+          {!group.isSuggested && (
             <div className="color-swatch-container">
               <button
                 className="color-swatch"
@@ -177,15 +177,15 @@ function GroupContainer({ group, tabs, isSuggested = false, confidence = null, d
             <span
               className="group-title"
               onClick={handleTitleClick}
-              style={{ cursor: isSuggested ? 'default' : 'pointer' }}
-              title={isSuggested ? '' : 'Click to edit'}
+              style={{ cursor: group.isSuggested ? 'default' : 'pointer' }}
+              title={group.isSuggested ? '' : 'Click to edit'}
             >
               {group.title || 'Untitled Group'}
             </span>
           )}
 
           {/* AI Name Generation */}
-          {!isSuggested && !isEditing && groupTabs.length > 0 && (
+          {!group.isSuggested && !isEditing && groupTabs.length > 0 && (
             <button
               className="btn-icon ai-name-btn"
               onClick={handleGenerateName}
@@ -196,17 +196,26 @@ function GroupContainer({ group, tabs, isSuggested = false, confidence = null, d
             </button>
           )}
 
-          {isSuggested && (
+          {group.isSuggested && (
             <span className="suggested-badge">Suggested</span>
           )}
-          {confidence && (
-            <span className="confidence-badge">{Math.round(confidence * 100)}%</span>
+          {group.confidence && (
+            <span className="confidence-badge">{Math.round(group.confidence * 100)}%</span>
           )}
         </div>
 
         <div className="group-actions">
           <span className="tab-count">{groupTabs.length}</span>
-          {!isSuggested && (
+          {group.isSuggested && onDismiss && (
+            <button
+              className="btn-icon dismiss-suggestion"
+              onClick={onDismiss}
+              title="Dismiss suggestion"
+            >
+              ×
+            </button>
+          )}
+          {!group.isSuggested && (
             <button
               className="btn-icon delete-group"
               onClick={handleDeleteGroup}
