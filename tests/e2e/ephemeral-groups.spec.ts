@@ -59,27 +59,28 @@ async function injectChromeMock(page: any, tabs: any[], groups: any[], mockAnaly
           }
           if (msg.action === 'analyzeAllTabs') {
             // Return mock AI analysis response with delay to simulate real analysis
+            // IMPORTANT: This should match what the service worker returns,
+            // NOT what AIOperations.analyzeAllTabs() returns (it wraps this in another layer)
             return new Promise(resolve => {
               setTimeout(() => {
                 const response = mockAnalysisResponse || {
                   success: true,
-                  data: {
-                    suggestions: [
-                      {
-                        groupName: 'Work Tabs',
-                        tabIds: [tabs[0]?.id, tabs[1]?.id].filter(Boolean),
-                        confidence: 0.95,
-                        color: 'blue'
-                      },
-                      {
-                        groupName: 'Research',
-                        tabIds: [tabs[2]?.id, tabs[3]?.id].filter(Boolean),
-                        confidence: 0.85,
-                        color: 'green'
-                      }
-                    ],
-                    analyses: []
-                  }
+                  suggestions: [
+                    {
+                      groupName: 'Work Tabs',
+                      tabIds: [tabs[0]?.id, tabs[1]?.id].filter(Boolean),
+                      confidence: 0.95,
+                      color: 'blue'
+                    },
+                    {
+                      groupName: 'Research',
+                      tabIds: [tabs[2]?.id, tabs[3]?.id].filter(Boolean),
+                      confidence: 0.85,
+                      color: 'green'
+                    }
+                  ],
+                  analyses: [],
+                  cached: false
                 };
                 console.log('Mock analyzeAllTabs called, returning after delay:', response);
                 resolve(response);
