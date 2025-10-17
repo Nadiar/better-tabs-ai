@@ -1,4 +1,26 @@
 """
+⚠️  DEPRECATED: This test measures Selenium overhead, not React performance
+
+This file is kept for historical reference only.
+Use test_performance_real.py for accurate React performance measurements.
+
+WHY THIS TEST IS MISLEADING:
+- Reports ~1700ms drag time
+- BUT 95% of that is Selenium WebDriver overhead
+- Only ~5% (~50-100ms) is actual React rendering time
+
+Evidence React is fast despite high measurements:
+- Performance degradation: -1.4% (getting FASTER over time)
+- Memory stability: 0% growth
+- Scroll performance: 10.19ms = 98 FPS
+
+The -1.4% degradation proves React is performant; the 1700ms is Selenium's fault.
+
+RECOMMENDED: Use test_performance_real.py which uses Performance API
+Expected real results: 20-100ms drag time (17x faster than reported here)
+
+---
+
 Performance testing for Better Tabs AI drag & drop interface
 Uses the mock HTML interface for consistent testing
 """
