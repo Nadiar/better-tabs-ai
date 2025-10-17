@@ -98,7 +98,7 @@ test.describe('Popup Interface - Baseline Tests', () => {
   test.beforeEach(async ({ page }) => {
     await injectChromeMock(page);
     await page.goto('http://127.0.0.1:8081/popup-react/dist/index.html');
-    await page.waitForTimeout(1000);
+    await expect(page.locator('header, #aiStatus')).toBeVisible({ timeout: 5000 });
   });
 
   test('should load popup interface successfully', async ({ page }) => {
@@ -134,8 +134,8 @@ test.describe('Popup Interface - Baseline Tests', () => {
     const analyzeButton = page.locator('button:has-text("Analyze")');
     await analyzeButton.click();
 
-    // Wait for analysis to complete (mocked response is instant)
-    await page.waitForTimeout(500);
+    // Wait for network activity to settle
+    await page.waitForLoadState('networkidle');
 
     // Should show results or suggestions
     // Note: Exact selectors depend on current popup implementation
@@ -176,7 +176,7 @@ test.describe('Popup Interface - Baseline Tests', () => {
 
     // Trigger various interactions
     await page.reload();
-    await page.waitForTimeout(1000);
+    await expect(page.locator('header, #aiStatus')).toBeVisible({ timeout: 5000 });
 
     // Should have minimal or no errors
     // (Some errors might be expected from Chrome extension APIs in file:// protocol)
@@ -188,7 +188,7 @@ test.describe('Popup Interface - Mock AI Interactions', () => {
   test.beforeEach(async ({ page }) => {
     await injectChromeMock(page);
     await page.goto('http://127.0.0.1:8081/popup-react/dist/index.html');
-    await page.waitForTimeout(1000);
+    await expect(page.locator('header, #aiStatus')).toBeVisible({ timeout: 5000 });
   });
 
   test('should receive mocked AI analysis response', async ({ page }) => {
@@ -205,7 +205,7 @@ test.describe('Popup Interface - Mock AI Interactions', () => {
     const analyzeButton = page.locator('button:has-text("Analyze")');
     if (await analyzeButton.isVisible()) {
       await analyzeButton.click();
-      await page.waitForTimeout(1000);
+      await page.waitForLoadState('networkidle');
     }
 
     // Note: File protocol tests won't actually trigger HTTP requests
@@ -221,7 +221,7 @@ test.describe('Popup Interface - Mock AI Interactions', () => {
     const analyzeButton = page.locator('button:has-text("Analyze")');
     if (await analyzeButton.isVisible()) {
       await analyzeButton.click();
-      await page.waitForTimeout(1000);
+      await page.waitForLoadState('networkidle');
 
       // Look for suggestion elements
       // Exact selectors depend on popup implementation
@@ -235,7 +235,7 @@ test.describe('Popup Interface - Regression Tests', () => {
   test.beforeEach(async ({ page }) => {
     await injectChromeMock(page);
     await page.goto('http://127.0.0.1:8081/popup-react/dist/index.html');
-    await page.waitForTimeout(1000);
+    await expect(page.locator('header, #aiStatus')).toBeVisible({ timeout: 5000 });
   });
 
   test('should not have JavaScript errors on load', async ({ page }) => {
@@ -245,7 +245,7 @@ test.describe('Popup Interface - Regression Tests', () => {
     });
 
     await page.reload();
-    await page.waitForTimeout(500);
+    await expect(page.locator('header, #aiStatus')).toBeVisible({ timeout: 5000 });
 
     // Should have no JS errors
     expect(errors.length).toBe(0);

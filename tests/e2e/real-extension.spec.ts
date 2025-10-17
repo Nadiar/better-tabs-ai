@@ -30,8 +30,10 @@ test.describe('Real Extension Tests', () => {
       ],
     });
 
-    // Wait a bit for extension to initialize
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    // Wait for extension to initialize - check for service workers
+    await context.waitForEvent('serviceworker', { timeout: 10000 }).catch(() => {
+      // Service worker may already be registered, continue
+    });
 
     // Get extension ID from background page
     const backgroundPages = context.backgroundPages();
@@ -66,7 +68,7 @@ test.describe('Real Extension Tests', () => {
 
     try {
       await page.goto(`chrome-extension://${extensionId}/popup-react/dist/index.html`);
-      await page.waitForTimeout(2000);
+      await expect(page.locator('#root, header')).toBeVisible({ timeout: 5000 });
 
       // Check if popup loaded
       const title = await page.title();
@@ -85,7 +87,6 @@ test.describe('Real Extension Tests', () => {
 
     try {
       await page.goto(`chrome-extension://${extensionId}/full-interface/dist/index.html`);
-      await page.waitForTimeout(2000);
 
       // Check if interface loaded
       const appContainer = page.locator('.app-container');
@@ -109,12 +110,12 @@ test.describe('Real Extension Tests', () => {
   test('should be able to query tabs', async ({ page }) => {
     // Open a test page first
     await page.goto('https://example.com');
-    await page.waitForTimeout(1000);
+    await page.waitForLoadState('load');
 
     // Now open full interface
     const fullInterfacePage = await context.newPage();
     await fullInterfacePage.goto(`chrome-extension://${extensionId}/full-interface/dist/index.html`);
-    await fullInterfacePage.waitForTimeout(2000);
+    await expect(fullInterfacePage.locator('.app-container')).toBeVisible({ timeout: 10000 });
 
     // Check if tabs are displayed (should show at least the example.com tab)
     const tabs = fullInterfacePage.locator('.tab-card');
@@ -131,7 +132,8 @@ test.describe('Real Extension Tests', () => {
 
     try {
       await page.goto(`chrome-extension://${extensionId}/popup-react/dist/index.html`);
-      await page.waitForTimeout(5000); // Wait for AI status check
+      // Wait for AI status check to complete
+      await expect(page.locator('#aiStatus, header')).toBeVisible({ timeout: 10000 });
 
       // Look for AI status indicator
       const statusIndicator = page.locator('#aiStatus').first();
@@ -158,7 +160,7 @@ test.describe('Real Extension Tests', () => {
 
     try {
       await page.goto(`chrome-extension://${extensionId}/full-interface/dist/index.html`);
-      await page.waitForTimeout(2000);
+      await expect(page.locator('.app-container')).toBeVisible({ timeout: 10000 });
 
       // Look for analyze button
       const analyzeButton = page.locator('button:has-text("Analyze"), button:has-text("AI")');
@@ -192,7 +194,10 @@ test.describe('Real Extension - Chrome API Tests', () => {
       ],
     });
 
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    // Wait for extension to initialize - check for service workers
+    await context.waitForEvent('serviceworker', { timeout: 10000 }).catch(() => {
+      // Service worker may already be registered, continue
+    });
 
     const serviceWorkers = context.serviceWorkers();
     if (serviceWorkers.length > 0) {
@@ -210,7 +215,7 @@ test.describe('Real Extension - Chrome API Tests', () => {
 
     try {
       await page.goto(`chrome-extension://${extensionId}/full-interface/dist/index.html`);
-      await page.waitForTimeout(2000);
+      await expect(page.locator('.app-container')).toBeVisible({ timeout: 10000 });
 
       // Check if chrome APIs are available in extension context
       const hasChromeAPI = await page.evaluate(() => {
@@ -229,7 +234,7 @@ test.describe('Real Extension - Chrome API Tests', () => {
 
     try {
       await page.goto(`chrome-extension://${extensionId}/full-interface/dist/index.html`);
-      await page.waitForTimeout(2000);
+      await expect(page.locator('.app-container')).toBeVisible({ timeout: 10000 });
 
       // Try to read from storage
       const storageWorks = await page.evaluate(async () => {

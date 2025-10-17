@@ -37,19 +37,15 @@ async function performPositionedDrag(
     // Start drag
     await page.mouse.move(startX, startY);
     await page.mouse.down();
-    await page.waitForTimeout(50);
 
     // Move slightly to activate drag (must exceed 8px activation constraint)
     await page.mouse.move(startX + 10, startY + 10);
-    await page.waitForTimeout(100);
 
-    // Move to target position
-    await page.mouse.move(targetX, targetY, { steps: 20 });
-    await page.waitForTimeout(300); // Extra time to see visual feedback
+    // Move to target position (reduced steps for faster execution)
+    await page.mouse.move(targetX, targetY, { steps: 5 });
 
     // Drop
     await page.mouse.up();
-    await page.waitForTimeout(200);
   }
 }
 
@@ -153,7 +149,7 @@ test.describe('Drop Positioning - Insert Before', () => {
   test.beforeEach(async ({ page }) => {
     await injectChromeMock(page, sampleMultiGroupData.tabs, sampleMultiGroupData.groups);
     await page.goto('http://127.0.0.1:8081/full-interface/dist/index.html');
-    await page.waitForTimeout(2000);
+    await expect(page.locator('.app-container')).toBeVisible({ timeout: 5000 });
   });
 
   test('should insert tab BEFORE target when dropped on left half', async ({ page }) => {
@@ -214,15 +210,12 @@ test.describe('Drop Positioning - Insert Before', () => {
       // Start dragging first tab
       await page.mouse.move(firstBox.x + firstBox.width / 2, firstBox.y + firstBox.height / 2);
       await page.mouse.down();
-      await page.waitForTimeout(50);
       await page.mouse.move(firstBox.x + firstBox.width / 2 + 10, firstBox.y + firstBox.height / 2 + 10);
-      await page.waitForTimeout(100);
 
       // Hover over LEFT half of second tab
       const leftHalfX = secondBox.x + secondBox.width * 0.25;
       const centerY = secondBox.y + secondBox.height / 2;
-      await page.mouse.move(leftHalfX, centerY, { steps: 10 });
-      await page.waitForTimeout(200);
+      await page.mouse.move(leftHalfX, centerY, { steps: 5 });
 
       // Check for visual feedback (border-left should be applied via inline style)
       const secondTabStyle = await secondTab.getAttribute('style');
@@ -239,7 +232,7 @@ test.describe('Drop Positioning - Insert After', () => {
   test.beforeEach(async ({ page }) => {
     await injectChromeMock(page, sampleMultiGroupData.tabs, sampleMultiGroupData.groups);
     await page.goto('http://127.0.0.1:8081/full-interface/dist/index.html');
-    await page.waitForTimeout(2000);
+    await expect(page.locator('.app-container')).toBeVisible({ timeout: 5000 });
   });
 
   test('should insert tab AFTER target when dropped on right half', async ({ page }) => {
@@ -295,15 +288,12 @@ test.describe('Drop Positioning - Insert After', () => {
       // Start dragging first tab
       await page.mouse.move(firstBox.x + firstBox.width / 2, firstBox.y + firstBox.height / 2);
       await page.mouse.down();
-      await page.waitForTimeout(50);
       await page.mouse.move(firstBox.x + firstBox.width / 2 + 10, firstBox.y + firstBox.height / 2 + 10);
-      await page.waitForTimeout(100);
 
       // Hover over RIGHT half of second tab
       const rightHalfX = secondBox.x + secondBox.width * 0.75;
       const centerY = secondBox.y + secondBox.height / 2;
-      await page.mouse.move(rightHalfX, centerY, { steps: 10 });
-      await page.waitForTimeout(200);
+      await page.mouse.move(rightHalfX, centerY, { steps: 5 });
 
       // Check for visual feedback
       const secondTabStyle = await secondTab.getAttribute('style');
@@ -319,7 +309,7 @@ test.describe('Drop Positioning - Cross-Group', () => {
   test.beforeEach(async ({ page }) => {
     await injectChromeMock(page, sampleMultiGroupData.tabs, sampleMultiGroupData.groups);
     await page.goto('http://127.0.0.1:8081/full-interface/dist/index.html');
-    await page.waitForTimeout(2000);
+    await expect(page.locator('.app-container')).toBeVisible({ timeout: 5000 });
   });
 
   test.skip('should move tab to different group with precise positioning', async ({ page }) => {
@@ -360,7 +350,7 @@ test.describe('Drop Positioning - Edge Cases', () => {
   test.beforeEach(async ({ page }) => {
     await injectChromeMock(page, sampleMultiGroupData.tabs, sampleMultiGroupData.groups);
     await page.goto('http://127.0.0.1:8081/full-interface/dist/index.html');
-    await page.waitForTimeout(2000);
+    await expect(page.locator('.app-container')).toBeVisible({ timeout: 5000 });
   });
 
   test('should insert at start when dropping before first tab', async ({ page }) => {

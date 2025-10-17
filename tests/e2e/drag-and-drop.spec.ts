@@ -28,15 +28,12 @@ async function performDrag(page: any, sourceLocator: any, targetLocator: any) {
     // Start drag
     await page.mouse.move(startX, startY);
     await page.mouse.down();
-    await page.waitForTimeout(50);
 
     // Move slightly to activate drag (must exceed 8px activation constraint)
     await page.mouse.move(startX + 10, startY + 10);
-    await page.waitForTimeout(100);
 
-    // Move to target
-    await page.mouse.move(endX, endY, { steps: 20 });
-    await page.waitForTimeout(200);
+    // Move to target (reduced from 20 to 5 steps for faster execution)
+    await page.mouse.move(endX, endY, { steps: 5 });
 
     // Drop
     await page.mouse.up();
@@ -154,7 +151,7 @@ test.describe('Drag and Drop - Ungrouped to Group', () => {
   test.beforeEach(async ({ page }) => {
     await injectChromeMock(page, sampleDragDropData.tabs, sampleDragDropData.groups);
     await page.goto('http://127.0.0.1:8081/full-interface/dist/index.html');
-    await page.waitForTimeout(2000);
+    await expect(page.locator('.app-container')).toBeVisible({ timeout: 5000 });
   });
 
   test('should drag tab from ungrouped to existing group', async ({ page }) => {
@@ -179,7 +176,6 @@ test.describe('Drag and Drop - Ungrouped to Group', () => {
 
     // Perform drag
     await performDrag(page, ungroupedTab, groupContainer);
-    await page.waitForTimeout(500);
 
     // Verify the tab moved
     const finalUngroupedCount = await page.locator('.ungrouped-column .tab-card').count();
@@ -207,7 +203,6 @@ test.describe('Drag and Drop - Ungrouped to Group', () => {
 
     // Perform drag
     await performDrag(page, ungroupedTab, newGroupBox);
-    await page.waitForTimeout(500);
 
     // Should have created a new group
     const finalGroupCount = await page.locator('.group-container').count();
@@ -219,7 +214,7 @@ test.describe('Drag and Drop - Group to Ungrouped', () => {
   test.beforeEach(async ({ page }) => {
     await injectChromeMock(page, sampleDragDropData.tabs, sampleDragDropData.groups);
     await page.goto('http://127.0.0.1:8081/full-interface/dist/index.html');
-    await page.waitForTimeout(2000);
+    await expect(page.locator('.app-container')).toBeVisible({ timeout: 5000 });
   });
 
   test('should drag tab from group to ungrouped column', async ({ page }) => {
@@ -239,7 +234,6 @@ test.describe('Drag and Drop - Group to Ungrouped', () => {
 
     // Perform drag
     await performDrag(page, groupedTab, ungroupedColumn);
-    await page.waitForTimeout(500);
 
     // Verify the tab moved
     const finalGroupCount = await page.locator('.group-container .tab-card').count();
@@ -255,7 +249,7 @@ test.describe('Drag and Drop - Group to Group', () => {
     // Use multi-group sample data
     await injectChromeMock(page, sampleMultiGroupData.tabs, sampleMultiGroupData.groups);
     await page.goto('http://127.0.0.1:8081/full-interface/dist/index.html');
-    await page.waitForTimeout(2000);
+    await expect(page.locator('.app-container')).toBeVisible({ timeout: 5000 });
   });
 
   test('should drag tab from one group to another', async ({ page }) => {
@@ -279,7 +273,6 @@ test.describe('Drag and Drop - Group to Group', () => {
 
     // Perform drag
     await performDrag(page, firstGroupTab, secondGroup);
-    await page.waitForTimeout(500);
 
     // Verify counts changed
     const finalFirstGroupCount = await page.locator('.group-container').nth(0).locator('.tab-card').count();
@@ -294,7 +287,7 @@ test.describe('Drag and Drop - Reordering', () => {
   test.beforeEach(async ({ page }) => {
     await injectChromeMock(page, sampleDragDropData.tabs, sampleDragDropData.groups);
     await page.goto('http://127.0.0.1:8081/full-interface/dist/index.html');
-    await page.waitForTimeout(2000);
+    await expect(page.locator('.app-container')).toBeVisible({ timeout: 5000 });
   });
 
   test.skip('should reorder tabs within the same group', async ({ page }) => {
@@ -328,7 +321,6 @@ test.describe('Drag and Drop - Reordering', () => {
     // NOTE: With Issue #22 position detection, dropping at center (50%) is treated as "before"
     // So dragging tab 2 onto tab 1 will insert tab 2 BEFORE tab 1
     await performDrag(page, secondTab, firstTab);
-    await page.waitForTimeout(500);
 
     // Verify order changed - tab 2 should now be first
     const newFirstTabTitle = await groupTabs.nth(0).locator('.tab-title').textContent();

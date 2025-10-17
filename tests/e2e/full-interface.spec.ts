@@ -98,7 +98,7 @@ test.describe('Full Interface - Baseline Tests', () => {
   test.beforeEach(async ({ page }) => {
     await injectChromeMock(page);
     await page.goto('http://127.0.0.1:8081/full-interface/dist/index.html');
-    await page.waitForTimeout(1000);
+    await expect(page.locator('.app-container, #root')).toBeVisible({ timeout: 5000 });
   });
 
   test('should load full interface successfully', async ({ page }) => {
@@ -163,7 +163,7 @@ test.describe('Full Interface - Baseline Tests', () => {
     });
 
     await page.reload();
-    await page.waitForTimeout(1000);
+    await expect(page.locator('.app-container, #root')).toBeVisible({ timeout: 5000 });
 
     // Should have no critical JS errors
     expect(errors.length).toBe(0);
@@ -174,7 +174,7 @@ test.describe('Full Interface - Drag & Drop Baseline', () => {
   test.beforeEach(async ({ page }) => {
     await injectChromeMock(page);
     await page.goto('http://127.0.0.1:8081/full-interface/dist/index.html');
-    await page.waitForTimeout(1000);
+    await expect(page.locator('.app-container, #root')).toBeVisible({ timeout: 5000 });
   });
 
   test('should display tab cards', async ({ page }) => {
@@ -216,7 +216,7 @@ test.describe('Full Interface - AI Integration Baseline', () => {
   test.beforeEach(async ({ page }) => {
     await injectChromeMock(page);
     await page.goto('http://127.0.0.1:8081/full-interface/dist/index.html');
-    await page.waitForTimeout(1000);
+    await expect(page.locator('.app-container, #root')).toBeVisible({ timeout: 5000 });
   });
 
   test('should have AI analyze button', async ({ page }) => {
@@ -230,9 +230,10 @@ test.describe('Full Interface - AI Integration Baseline', () => {
 
     if (await analyzeButton.isVisible()) {
       await analyzeButton.click();
-      await page.waitForTimeout(500);
 
-      // Should not crash
+      // Should not crash - wait for network idle or any state change
+      await page.waitForLoadState('networkidle');
+
       const errors = page.locator('.error, [class*="error"]');
       const errorCount = await errors.count();
 
@@ -246,7 +247,9 @@ test.describe('Full Interface - AI Integration Baseline', () => {
 
     if (await analyzeButton.isVisible()) {
       await analyzeButton.click();
-      await page.waitForTimeout(2000);
+
+      // Wait for network activity to settle after analysis
+      await page.waitForLoadState('networkidle');
 
       // Look for suggestion elements
       const suggestions = page.locator(
@@ -264,7 +267,7 @@ test.describe('Full Interface - Staged Changes Baseline', () => {
   test.beforeEach(async ({ page }) => {
     await injectChromeMock(page);
     await page.goto('http://127.0.0.1:8081/full-interface/dist/index.html');
-    await page.waitForTimeout(1000);
+    await expect(page.locator('.app-container, #root')).toBeVisible({ timeout: 5000 });
   });
 
   test('should have Apply Changes button', async ({ page }) => {
@@ -288,7 +291,6 @@ test.describe('Full Interface - Staged Changes Baseline', () => {
 
     if (await applyButton.isEnabled()) {
       await applyButton.click();
-      await page.waitForTimeout(500);
 
       // Should not crash
     }
@@ -299,7 +301,6 @@ test.describe('Full Interface - Staged Changes Baseline', () => {
 
     if (await cancelButton.isEnabled()) {
       await cancelButton.click();
-      await page.waitForTimeout(500);
 
       // Should not crash
     }
@@ -320,7 +321,7 @@ test.describe('Full Interface - Regression Tests', () => {
     });
 
     await page.goto('http://127.0.0.1:8081/full-interface/dist/index.html');
-    await page.waitForTimeout(1000);
+    await expect(page.locator('.app-container, #root')).toBeVisible({ timeout: 5000 });
 
     // Filter out expected Chrome extension errors and mock-related errors
     const criticalErrors = errors.filter(
