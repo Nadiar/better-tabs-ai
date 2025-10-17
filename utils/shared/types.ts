@@ -38,6 +38,8 @@ export interface GroupData {
   title: string;
   color: ChromeColor;
   collapsed: boolean;
+  isSuggested?: boolean;  // Ephemeral groups from AI - removed on cancel/dismiss
+  confidence?: number;     // AI confidence score for suggestions
 }
 
 // ============================================================================

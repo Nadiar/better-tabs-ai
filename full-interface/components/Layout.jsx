@@ -107,6 +107,7 @@ function Layout() {
   const handleRefresh = async () => {
     if (!hasChanges || confirm('Refreshing will discard unsaved changes. Continue?')) {
       await refreshFromChrome();
+      dismissConflictBanner(); // Dismiss the banner after refreshing
     }
   };
 
@@ -462,10 +463,10 @@ function Layout() {
               <img
                 src={(() => {
                   // Use chrome://favicon/ API to access Chrome's favicon cache
+                  // Use full URL (not just origin) to get page-specific favicons
                   if (activeTab.url) {
                     try {
-                      const url = new URL(activeTab.url);
-                      return `chrome://favicon/size/16@2x/${url.origin}`;
+                      return `chrome://favicon/size/16@2x/${activeTab.url}`;
                     } catch (e) {
                       return chrome.runtime.getURL('icons/icon16.png');
                     }
