@@ -69,6 +69,7 @@ web-ext-artifacts/
 !CHANGELOG.md
 !DEVELOPMENT.md
 !CONTRIBUTING.md
+!BUILD.md
 !copilot-prompt-template.md
 
 REFACTOR_PLAN.md
