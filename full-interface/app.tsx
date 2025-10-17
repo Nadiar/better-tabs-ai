@@ -583,6 +583,7 @@ function App() {
 
   const analyzeTabs = async () => {
     setIsAnalyzing(true);
+    setAnalysisProgress({ current: 0, total: 0, status: 'summarizing' }); // Initialize with summarizing status
     setSuggestions(null); // Clear old suggestions when starting new analysis
 
     try {

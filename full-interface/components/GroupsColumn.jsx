@@ -105,6 +105,7 @@ function GroupsColumn({ groups, tabs, suggestions, duplicateTabs = [], activeDro
                   key={item.key}
                   suggestion={item.data}
                   tabs={tabs}
+                  duplicateTabs={duplicateTabs}
                   onCreate={() => handleCreateSuggestion(item.data, item.index)}
                   onDismiss={() => handleDismissSuggestion(item.index)}
                 />

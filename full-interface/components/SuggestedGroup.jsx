@@ -1,8 +1,10 @@
 import React from 'react';
+import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import SortableTabCard from './SortableTabCard';
 
 
 // Suggested Group - Displays an AI-generated grouping suggestion
-function SuggestedGroup({ suggestion, tabs, onCreate, onDismiss }) {
+function SuggestedGroup({ suggestion, tabs, onCreate, onDismiss, duplicateTabs = [] }) {
   const suggestedTabs = tabs.filter(tab => suggestion.tabIds?.includes(tab.id));
 
   const getGroupColor = (color) => {
@@ -54,27 +56,27 @@ function SuggestedGroup({ suggestion, tabs, onCreate, onDismiss }) {
         </div>
       </div>
 
-      <div className="group-tabs">
-        {suggestedTabs.map(tab => (
-          <div
-            key={tab.id}
-            className="tab-card suggested-tab"
-            draggable="true"
-            data-tab-id={tab.id}
-          >
-            <img
-              src={tab.favIconUrl || chrome.runtime.getURL('icons/icon16.png')}
-              alt=""
-              className="tab-favicon"
-              onError={(e) => { e.target.src = chrome.runtime.getURL('icons/icon16.png'); }}
-            />
-            <div className="tab-info">
-              <div className="tab-title">{tab.title}</div>
-              <div className="tab-url">{new URL(tab.url).hostname}</div>
-            </div>
-          </div>
-        ))}
-      </div>
+      <SortableContext
+        items={suggestedTabs.map(t => `tab-${t.id}`)}
+        strategy={verticalListSortingStrategy}
+      >
+        <div className="group-tabs">
+          {suggestedTabs.map(tab => {
+            const isDuplicate = duplicateTabs.includes(tab.id);
+
+            return (
+              <SortableTabCard
+                key={tab.id}
+                tab={tab}
+                isSelected={false}
+                isDuplicate={isDuplicate}
+                onSelect={() => {}}
+                onFindGroup={() => {}}
+              />
+            );
+          })}
+        </div>
+      </SortableContext>
     </div>
   );
 }
