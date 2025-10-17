@@ -674,7 +674,8 @@ function App() {
         // Update progress
         setAnalysisProgress(progressResult.data);
 
-        if (progressResult.data.status === 'complete') {
+        // Stop polling when analysis is complete OR no longer in progress
+        if (progressResult.data.status === 'complete' || !progressResult.data.inProgress) {
           clearInterval(pollInterval);
 
           const resultsResponse = await chrome.runtime.sendMessage({
