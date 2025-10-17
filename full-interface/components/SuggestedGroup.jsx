@@ -5,7 +5,7 @@ import SortableTabCard from './SortableTabCard';
 
 
 // Suggested Group - Displays an AI-generated grouping suggestion
-function SuggestedGroup({ suggestion, tabs, onCreate, onDismiss, onRegenerateName, duplicateTabs = [], suggestionIndex }) {
+function SuggestedGroup({ suggestion, tabs, onCreate, onDismiss, onRegenerateName, duplicateTabs = [], suggestionIndex, activeDropTarget, dropPosition }) {
   const suggestedTabs = tabs.filter(tab => suggestion.tabIds?.includes(tab.id));
   const [isGeneratingName, setIsGeneratingName] = useState(false);
 
@@ -111,6 +111,7 @@ function SuggestedGroup({ suggestion, tabs, onCreate, onDismiss, onRegenerateNam
         <div className="group-tabs">
           {suggestedTabs.map(tab => {
             const isDuplicate = duplicateTabs.includes(tab.id);
+            const isDropTarget = activeDropTarget === `tab-${tab.id}`;
 
             return (
               <SortableTabCard
@@ -118,6 +119,8 @@ function SuggestedGroup({ suggestion, tabs, onCreate, onDismiss, onRegenerateNam
                 tab={tab}
                 isSelected={false}
                 isDuplicate={isDuplicate}
+                isDropTarget={isDropTarget}
+                dropPosition={isDropTarget ? dropPosition : null}
                 onSelect={() => {}}
                 onFindGroup={() => {}}
               />

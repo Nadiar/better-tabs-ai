@@ -119,6 +119,8 @@ function GroupsColumn({ groups, tabs, suggestions, duplicateTabs = [], activeDro
                   suggestionIndex={item.index}
                   tabs={tabs}
                   duplicateTabs={duplicateTabs}
+                  activeDropTarget={activeDropTarget}
+                  dropPosition={dropPosition}
                   onCreate={() => handleCreateSuggestion(item.data, item.index)}
                   onDismiss={() => handleDismissSuggestion(item.index)}
                   onRegenerateName={handleRegenerateName}

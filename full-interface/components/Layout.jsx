@@ -460,7 +460,18 @@ function Layout() {
           {activeTab ? (
             <div className="tab-card dragging-overlay">
               <img
-                src={activeTab.favIconUrl || chrome.runtime.getURL('icons/icon16.png')}
+                src={(() => {
+                  // Use chrome://favicon/ API to access Chrome's favicon cache
+                  if (activeTab.url) {
+                    try {
+                      const url = new URL(activeTab.url);
+                      return `chrome://favicon/size/16@2x/${url.origin}`;
+                    } catch (e) {
+                      return chrome.runtime.getURL('icons/icon16.png');
+                    }
+                  }
+                  return chrome.runtime.getURL('icons/icon16.png');
+                })()}
                 alt=""
                 className="tab-favicon"
                 onError={(e) => {

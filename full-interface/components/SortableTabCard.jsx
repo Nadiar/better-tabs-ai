@@ -33,7 +33,17 @@ function SortableTabCard({ tab, isSelected, isDuplicate, onSelect, onFindGroup, 
   };
 
   const getFaviconUrl = (tab) => {
-    return tab.favIconUrl || chrome.runtime.getURL('icons/icon16.png');
+    // Use chrome://favicon/ API to access Chrome's favicon cache
+    // This avoids CORS issues with direct favicon URLs
+    if (tab.url) {
+      try {
+        const url = new URL(tab.url);
+        return `chrome://favicon/size/16@2x/${url.origin}`;
+      } catch (e) {
+        return chrome.runtime.getURL('icons/icon16.png');
+      }
+    }
+    return chrome.runtime.getURL('icons/icon16.png');
   };
 
   const getDomain = (url) => {
