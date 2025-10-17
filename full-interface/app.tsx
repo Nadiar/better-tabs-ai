@@ -159,11 +159,6 @@ function App() {
       });
     };
 
-    // Handle suggestion updates (when tabs are dragged to/from suggestions)
-    const handleUpdateSuggestions = (event: Event) => {
-      const customEvent = event as CustomEvent<{ suggestions: AISuggestion[] }>;
-      setSuggestions(customEvent.detail.suggestions);
-    };
 
     // Listen to Chrome tab/group events
     chrome.tabs.onCreated.addListener(handleTabUpdate);
@@ -175,8 +170,6 @@ function App() {
 
     // Listen to custom events
     window.addEventListener('dismissSuggestion', handleDismissSuggestion);
-    window.addEventListener('updateSuggestions', handleUpdateSuggestions);
-
     // Cleanup listeners
     return () => {
       chrome.tabs.onCreated.removeListener(handleTabUpdate);
@@ -186,7 +179,6 @@ function App() {
       chrome.tabGroups.onRemoved.removeListener(handleTabUpdate);
       chrome.tabGroups.onUpdated.removeListener(handleTabUpdate);
       window.removeEventListener('dismissSuggestion', handleDismissSuggestion);
-      window.removeEventListener('updateSuggestions', handleUpdateSuggestions);
     };
   }, []); // Remove hasChanges dependency to avoid recreating listeners
 

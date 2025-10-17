@@ -20,15 +20,9 @@ function TabCard({ tab, isSelected, isDuplicate, onSelect, onFindGroup }) {
   };
 
   const getFaviconUrl = (tab) => {
-    // Use chrome://favicon/ API to access Chrome's favicon cache
-    // This avoids CORS issues with direct favicon URLs
-    // Use full URL (not just origin) to get page-specific favicons
-    if (tab.url) {
-      try {
-        return `chrome://favicon/size/16@2x/${tab.url}`;
-      } catch (e) {
-        return chrome.runtime.getURL('icons/icon16.png');
-      }
+    // Use tab's favIconUrl if available, otherwise fallback to extension icon
+    if (tab.favIconUrl && tab.favIconUrl.startsWith('http')) {
+      return tab.favIconUrl;
     }
     return chrome.runtime.getURL('icons/icon16.png');
   };
