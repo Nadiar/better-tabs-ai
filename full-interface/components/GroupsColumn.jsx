@@ -79,6 +79,18 @@ function GroupsColumn({ groups, tabs, suggestions, duplicateTabs = [], activeDro
     window.dispatchEvent(new CustomEvent('dismissSuggestion', { detail: { index } }));
   }, []);
 
+  const handleRegenerateName = useCallback((suggestionIndex, newName) => {
+    // Update suggestion name
+    const updatedSuggestions = [...suggestions];
+    updatedSuggestions[suggestionIndex] = {
+      ...updatedSuggestions[suggestionIndex],
+      groupName: newName
+    };
+    window.dispatchEvent(new CustomEvent('updateSuggestions', {
+      detail: { suggestions: updatedSuggestions }
+    }));
+  }, [suggestions]);
+
   return (
     <div className="column groups-column">
       <div className="column-header">
@@ -104,10 +116,12 @@ function GroupsColumn({ groups, tabs, suggestions, duplicateTabs = [], activeDro
                 <SuggestedGroup
                   key={item.key}
                   suggestion={item.data}
+                  suggestionIndex={item.index}
                   tabs={tabs}
                   duplicateTabs={duplicateTabs}
                   onCreate={() => handleCreateSuggestion(item.data, item.index)}
                   onDismiss={() => handleDismissSuggestion(item.index)}
+                  onRegenerateName={handleRegenerateName}
                 />
               );
             } else {

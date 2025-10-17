@@ -191,6 +191,25 @@ function Layout() {
 
       console.log('Drag end:', { draggedTabId, dropTarget, activeId: active.id, overId: over.id });
 
+      // Check if tab is being moved FROM a suggestion
+      if (suggestions) {
+        suggestions.forEach((suggestion, index) => {
+          if (suggestion.tabIds.includes(draggedTabId)) {
+            // Tab was in this suggestion - remove it unless staying in same suggestion
+            if (!dropTarget.startsWith('suggestion-') || parseInt(dropTarget.replace('suggestion-', ''), 10) !== index) {
+              const updatedSuggestions = [...suggestions];
+              updatedSuggestions[index] = {
+                ...suggestion,
+                tabIds: suggestion.tabIds.filter(id => id !== draggedTabId)
+              };
+              window.dispatchEvent(new CustomEvent('updateSuggestions', {
+                detail: { suggestions: updatedSuggestions }
+              }));
+            }
+          }
+        });
+      }
+
       // Reordering within same group (sortable) or moving to different group with position
       if (dropTarget.startsWith('tab-')) {
         const overTabId = parseInt(dropTarget.replace('tab-', ''), 10);
@@ -264,6 +283,30 @@ function Layout() {
           tab.groupId = groupId;
         }
       });
+    }
+    // Tab dropped on a suggested group
+    else if (dropTarget.startsWith('suggestion-')) {
+      const suggestionIndex = parseInt(dropTarget.replace('suggestion-', ''), 10);
+      if (isNaN(suggestionIndex) || !suggestions || !suggestions[suggestionIndex]) {
+        console.error('Invalid suggestion index:', dropTarget);
+        return;
+      }
+
+      // Add tab to suggestion's tabIds
+      const suggestion = suggestions[suggestionIndex];
+      if (!suggestion.tabIds.includes(draggedTabId)) {
+        // Update the suggestions array to include this tab
+        const updatedSuggestions = [...suggestions];
+        updatedSuggestions[suggestionIndex] = {
+          ...suggestion,
+          tabIds: [...suggestion.tabIds, draggedTabId]
+        };
+
+        // Dispatch event to update suggestions in app.tsx
+        window.dispatchEvent(new CustomEvent('updateSuggestions', {
+          detail: { suggestions: updatedSuggestions }
+        }));
+      }
     }
     // Tab dropped on "New Group" box
     else if (dropTarget === 'new-group-box') {
