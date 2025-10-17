@@ -21,8 +21,8 @@ test.afterEach(() => resetMockServer());
 test.afterAll(() => closeMockServer());
 
 // Helper to inject Chrome API mock with ephemeral group support
-async function injectChromeMock(page: any, tabs: any[], groups: any[], mockAIResponse?: any) {
-  await page.addInitScript(({ tabs, groups, mockAIResponse }) => {
+async function injectChromeMock(page: any, tabs: any[], groups: any[], mockAnalysisResponse?: any) {
+  await page.addInitScript(({ tabs, groups, mockAnalysisResponse }) => {
     const fullTabs = tabs.map((tab: any, index: number) => ({
       id: tab.id,
       title: tab.title,
@@ -57,27 +57,34 @@ async function injectChromeMock(page: any, tabs: any[], groups: any[], mockAIRes
               capabilities: { analyze: true, generateNames: true }
             };
           }
-          if (msg.action === 'analyzeTabGroups') {
-            // Return mock AI response if provided
-            if (mockAIResponse) {
-              return mockAIResponse;
-            }
-            // Default: Create 2 suggested groups
-            return {
-              success: true,
-              suggestions: [
-                {
-                  title: 'Work Tabs',
-                  confidence: 0.95,
-                  tabs: [tabs[0]?.id, tabs[1]?.id].filter(Boolean)
-                },
-                {
-                  title: 'Research',
-                  confidence: 0.85,
-                  tabs: [tabs[2]?.id, tabs[3]?.id].filter(Boolean)
-                }
-              ]
-            };
+          if (msg.action === 'analyzeAllTabs') {
+            // Return mock AI analysis response with delay to simulate real analysis
+            return new Promise(resolve => {
+              setTimeout(() => {
+                const response = mockAnalysisResponse || {
+                  success: true,
+                  data: {
+                    suggestions: [
+                      {
+                        groupName: 'Work Tabs',
+                        tabIds: [tabs[0]?.id, tabs[1]?.id].filter(Boolean),
+                        confidence: 0.95,
+                        color: 'blue'
+                      },
+                      {
+                        groupName: 'Research',
+                        tabIds: [tabs[2]?.id, tabs[3]?.id].filter(Boolean),
+                        confidence: 0.85,
+                        color: 'green'
+                      }
+                    ],
+                    analyses: []
+                  }
+                };
+                console.log('Mock analyzeAllTabs called, returning after delay:', response);
+                resolve(response);
+              }, 500); // 500ms delay to simulate analysis time
+            });
           }
           if (msg.action === 'getAnalysisProgress') {
             return { status: 'idle', current: 0, total: 0 };
@@ -144,7 +151,7 @@ async function injectChromeMock(page: any, tabs: any[], groups: any[], mockAIRes
         onChanged: { addListener: () => {}, removeListener: () => {} }
       }
     };
-  }, { tabs, groups, mockAIResponse });
+  }, { tabs, groups, mockAnalysisResponse });
 }
 
 // Sample data for ephemeral groups tests
@@ -175,20 +182,23 @@ test.describe('Ephemeral Groups - Creation', () => {
     await expect(ungroupedTabs).toHaveCount(6);
 
     // Click Analyze button
-    const analyzeButton = page.locator('button:has-text("Analyze"), button:has-text("AI Analysis")');
+    const analyzeButton = page.locator('button:has-text("Analyze"), button:has-text("AI")');
     await expect(analyzeButton).toBeVisible();
     await analyzeButton.click();
 
     // Wait for analysis to complete and ephemeral groups to appear
+    // The app processes the mock response and creates groups in the DOM
     await page.waitForLoadState('networkidle');
-    await page.waitForTimeout(500); // Small wait for React state updates
+
+    // Wait for group containers to appear (with longer timeout)
+    await expect(page.locator('.group-container')).toHaveCount(2, { timeout: 10000 });
 
     // Check for ephemeral groups (they should have special styling/attributes)
     const groupContainers = page.locator('.group-container');
     const groupCount = await groupContainers.count();
 
-    // Should have created suggested groups
-    expect(groupCount).toBeGreaterThan(0);
+    // Should have created 2 suggested groups from mock
+    expect(groupCount).toBe(2);
 
     // Verify groups have visual indicators for ephemeral state
     // (exact selectors depend on implementation - could be class, data attribute, or badge)
@@ -214,6 +224,27 @@ test.describe('Ephemeral Groups - Creation', () => {
       expect(hasEphemeralIndicator).toBe(true);
     }
   });
+
+  test('should disable analyze button during analysis', async ({ page }) => {
+    // Get analyze button
+    const analyzeButton = page.locator('button:has-text("Analyze"), button:has-text("AI")');
+    await expect(analyzeButton).toBeVisible();
+
+    // Button should be enabled initially
+    await expect(analyzeButton).toBeEnabled();
+
+    // Click analyze
+    await analyzeButton.click();
+
+    // Button should be disabled immediately during analysis (500ms mock delay)
+    await expect(analyzeButton).toBeDisabled({ timeout: 1000 });
+
+    // Wait for analysis to complete
+    await expect(page.locator('.group-container')).toHaveCount(2, { timeout: 10000 });
+
+    // Button should be re-enabled after analysis
+    await expect(analyzeButton).toBeEnabled();
+  });
 });
 
 test.describe('Ephemeral Groups - Cancel Behavior', () => {
@@ -225,14 +256,16 @@ test.describe('Ephemeral Groups - Cancel Behavior', () => {
 
   test('should remove all ephemeral groups on cancel and restore tabs to ungrouped', async ({ page }) => {
     // Create ephemeral groups first
-    const analyzeButton = page.locator('button:has-text("Analyze"), button:has-text("AI Analysis")');
+    const analyzeButton = page.locator('button:has-text("Analyze"), button:has-text("AI")');
     await analyzeButton.click();
     await page.waitForLoadState('networkidle');
-    await page.waitForTimeout(500);
+
+    // Wait for groups to be created
+    await expect(page.locator('.group-container')).toHaveCount(2, { timeout: 10000 });
 
     // Verify ephemeral groups were created
     const groupsBefore = await page.locator('.group-container').count();
-    expect(groupsBefore).toBeGreaterThan(0);
+    expect(groupsBefore).toBe(2);
 
     // Click Cancel button
     const cancelButton = page.locator('button:has-text("Cancel")');
@@ -261,14 +294,16 @@ test.describe('Ephemeral Groups - Apply Behavior', () => {
 
   test('should convert ephemeral groups to permanent on apply', async ({ page }) => {
     // Create ephemeral groups first
-    const analyzeButton = page.locator('button:has-text("Analyze"), button:has-text("AI Analysis")');
+    const analyzeButton = page.locator('button:has-text("Analyze"), button:has-text("AI")');
     await analyzeButton.click();
     await page.waitForLoadState('networkidle');
-    await page.waitForTimeout(500);
+
+    // Wait for groups to be created
+    await expect(page.locator('.group-container')).toHaveCount(2, { timeout: 10000 });
 
     // Verify ephemeral groups exist
     const groupsBefore = await page.locator('.group-container').count();
-    expect(groupsBefore).toBeGreaterThan(0);
+    expect(groupsBefore).toBe(2);
 
     // Verify groups have ephemeral indicators before apply
     const firstGroupBefore = page.locator('.group-container').first();
@@ -317,14 +352,16 @@ test.describe('Ephemeral Groups - Re-analysis Behavior', () => {
 
   test('should clear old ephemeral groups when re-running analysis', async ({ page }) => {
     // First analysis
-    const analyzeButton = page.locator('button:has-text("Analyze"), button:has-text("AI Analysis")');
+    const analyzeButton = page.locator('button:has-text("Analyze"), button:has-text("AI")');
     await analyzeButton.click();
     await page.waitForLoadState('networkidle');
-    await page.waitForTimeout(500);
+
+    // Wait for groups to be created
+    await expect(page.locator('.group-container')).toHaveCount(2, { timeout: 10000 });
 
     // Verify first set of ephemeral groups
     const groupsAfterFirst = await page.locator('.group-container').count();
-    expect(groupsAfterFirst).toBeGreaterThan(0);
+    expect(groupsAfterFirst).toBe(2);
 
     // Get the titles of first analysis groups
     const firstAnalysisGroupTitles: string[] = [];
@@ -336,11 +373,13 @@ test.describe('Ephemeral Groups - Re-analysis Behavior', () => {
     // Second analysis - click Analyze again
     await analyzeButton.click();
     await page.waitForLoadState('networkidle');
-    await page.waitForTimeout(500);
+
+    // Wait for groups to be recreated
+    await expect(page.locator('.group-container')).toHaveCount(2, { timeout: 10000 });
 
     // Verify new set of ephemeral groups exist
     const groupsAfterSecond = await page.locator('.group-container').count();
-    expect(groupsAfterSecond).toBeGreaterThan(0);
+    expect(groupsAfterSecond).toBe(2);
 
     // The old ephemeral groups should have been cleared
     // In a real implementation, the AI might return different suggestions
@@ -368,14 +407,16 @@ test.describe('Ephemeral Groups - Individual Dismissal', () => {
 
   test('should remove individual ephemeral group on dismiss and move tabs to ungrouped', async ({ page }) => {
     // Create ephemeral groups
-    const analyzeButton = page.locator('button:has-text("Analyze"), button:has-text("AI Analysis")');
+    const analyzeButton = page.locator('button:has-text("Analyze"), button:has-text("AI")');
     await analyzeButton.click();
     await page.waitForLoadState('networkidle');
-    await page.waitForTimeout(500);
+
+    // Wait for groups to be created
+    await expect(page.locator('.group-container')).toHaveCount(2, { timeout: 10000 });
 
     // Get initial counts
     const initialGroupCount = await page.locator('.group-container').count();
-    expect(initialGroupCount).toBeGreaterThan(0);
+    expect(initialGroupCount).toBe(2);
 
     const initialUngroupedCount = await page.locator('.ungrouped-column .tab-card').count();
 
