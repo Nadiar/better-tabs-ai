@@ -593,6 +593,18 @@ function App() {
     setIsAnalyzing(true);
     setAnalysisProgress({ current: 0, total: 0, status: 'summarizing' }); // Initialize with summarizing status
     setSuggestions(null); // Clear old suggestions when starting new analysis
+    // Clear old ephemeral groups from staged state
+    updateStaged(draft => {
+      // Remove all groups with isSuggested flag
+      const ephemeralGroupIds = draft.groups.filter(g => g.isSuggested).map(g => g.id);
+      draft.groups = draft.groups.filter(g => !g.isSuggested);
+      // Ungroup all tabs that were in ephemeral groups
+      draft.tabs.forEach(tab => {
+        if (ephemeralGroupIds.includes(tab.groupId)) {
+          tab.groupId = -1; // Move back to ungrouped
+        }
+      });
+    });
 
     try {
       // Use shared AIOperations
