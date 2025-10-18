@@ -73,10 +73,12 @@ function App() {
 
       if (result.success) {
         setAIStatus(result.data);
+        setIsCheckingAI(false);
       } else {
-        // Retry once after 500ms if error
-        if (retryCount === 0) {
-          setTimeout(() => checkAIStatus(1), 500);
+        // Retry up to 2 times with delays if error
+        if (retryCount < 2) {
+          const delay = retryCount === 0 ? 300 : 800;
+          setTimeout(() => checkAIStatus(retryCount + 1), delay);
         } else {
           setAIStatus({
             available: false,
@@ -84,18 +86,24 @@ function App() {
             statusMessage: 'Error checking AI status',
             detailedStatus: result.error.message,
           });
+          setIsCheckingAI(false);
         }
       }
     } catch (error) {
       console.error('Error checking AI status:', error);
-      setAIStatus({
-        available: false,
-        status: 'unknown-error',
-        statusMessage: 'Error',
-        detailedStatus: error instanceof Error ? error.message : 'Unknown error',
-      });
-    } finally {
-      setIsCheckingAI(false);
+      // Retry on exception too
+      if (retryCount < 2) {
+        const delay = retryCount === 0 ? 300 : 800;
+        setTimeout(() => checkAIStatus(retryCount + 1), delay);
+      } else {
+        setAIStatus({
+          available: false,
+          status: 'unknown-error',
+          statusMessage: 'Error',
+          detailedStatus: error instanceof Error ? error.message : 'Unknown error',
+        });
+        setIsCheckingAI(false);
+      }
     }
   };
 

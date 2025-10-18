@@ -259,21 +259,26 @@ class BetterTabsAI {
         this.settings = { ...DEFAULT_SETTINGS, ...saved };
 
         // Check for prompt version mismatch (prompt update available)
-        if (!saved.promptVersion || saved.promptVersion < PROMPT_VERSION) {
-          console.log(`🆕 Prompt update available (v${saved.promptVersion || 1} → v${PROMPT_VERSION})`);
+        // Treat missing promptVersion as version 1
+        const currentPromptVersion = saved.promptVersion || 1;
+        const isCustomized = saved.promptCustomized === true;
+
+        if (currentPromptVersion < PROMPT_VERSION) {
+          console.log(`🆕 Prompt update available (v${currentPromptVersion} → v${PROMPT_VERSION})`);
 
           // If user has NOT customized the prompt, auto-update to new default
-          if (!saved.promptCustomized) {
+          if (!isCustomized) {
             console.log('⬆️ Auto-updating to new default prompt (user has not customized)');
             this.settings.customAIPromptRules = DEFAULT_AI_PROMPT_RULES;
             this.settings.promptVersion = PROMPT_VERSION;
+            this.settings.promptCustomized = false;
             await this.saveSettings(this.settings);
           } else {
             // User has customized - store update availability for UI notification
             console.log('⚠️ Prompt update available but user has customizations');
             await chrome.storage.local.set({
               promptUpdateAvailable: {
-                oldVersion: saved.promptVersion || 1,
+                oldVersion: currentPromptVersion,
                 newVersion: PROMPT_VERSION,
                 timestamp: Date.now()
               }

@@ -14,6 +14,29 @@ document.addEventListener('DOMContentLoaded', () => {
   setupEventListeners();
 });
 
+function checkForChanges() {
+  if (!currentSettings) return;
+
+  const formData = getFormData();
+  const saveBtn = document.getElementById('saveBtn') as HTMLButtonElement;
+  if (!saveBtn) return;
+
+  // Check if any field has changed
+  let hasChanges = false;
+  for (const key in formData) {
+    const formValue = (formData as any)[key];
+    const currentValue = (currentSettings as any)[key];
+
+    // Handle undefined/null comparison
+    if (formValue !== currentValue) {
+      hasChanges = true;
+      break;
+    }
+  }
+
+  saveBtn.disabled = !hasChanges;
+}
+
 function setupEventListeners() {
   // Group confidence threshold slider
   const confidenceSlider = document.getElementById(
@@ -22,6 +45,7 @@ function setupEventListeners() {
   confidenceSlider?.addEventListener('input', (e) => {
     const target = e.target as HTMLInputElement;
     updateConfidenceDisplay(parseFloat(target.value));
+    checkForChanges();
   });
 
   // Tab confidence threshold slider
@@ -31,6 +55,28 @@ function setupEventListeners() {
   tabConfidenceSlider?.addEventListener('input', (e) => {
     const target = e.target as HTMLInputElement;
     updateTabConfidenceDisplay(parseFloat(target.value));
+    checkForChanges();
+  });
+
+  // Add change listeners to all form fields
+  const formFields = [
+    'maxSuggestions',
+    'showConfidenceScores',
+    'showInlineSuggestions',
+    'defaultGroupColor',
+    'showAdvancedOptions',
+    'enableContentAnalysis',
+    'maxConcurrentAnalysis',
+    'cacheDuration',
+    'customAIPromptRules'
+  ];
+
+  formFields.forEach(fieldId => {
+    const field = document.getElementById(fieldId);
+    if (field) {
+      field.addEventListener('input', checkForChanges);
+      field.addEventListener('change', checkForChanges);
+    }
   });
 
   // Save button
@@ -62,6 +108,7 @@ async function loadSettings() {
       currentSettings = result.data;
       populateForm(currentSettings);
       updateStatusDisplay(currentSettings);
+      checkForChanges(); // Disable save button initially
     } else {
       NotificationManager.error('Failed to load settings');
     }
@@ -256,6 +303,7 @@ async function saveSettings() {
       currentSettings = result.data;
       updateStatusDisplay(result.data);
       NotificationManager.success('Settings saved successfully!');
+      checkForChanges(); // Disable save button after successful save
     } else {
       NotificationManager.error(`Failed to save settings: ${result.error.message}`);
     }
@@ -263,8 +311,8 @@ async function saveSettings() {
     console.error('Error saving settings:', error);
     NotificationManager.error('Error saving settings');
   } finally {
-    saveBtn.disabled = false;
     saveBtn.textContent = '💾 Save Settings';
+    // Don't re-enable here, let checkForChanges handle it
   }
 }
 
@@ -284,6 +332,7 @@ async function restoreDefaultPrompt() {
       if (customPromptTextarea) {
         customPromptTextarea.value = response.defaultRules;
         NotificationManager.success('Default AI rules restored. Click Save to apply.');
+        checkForChanges(); // Enable save button
       }
     }
   } catch (error) {
@@ -311,6 +360,7 @@ async function resetSettings() {
       populateForm(result.data);
       updateStatusDisplay(result.data);
       NotificationManager.success('Settings reset to defaults');
+      checkForChanges(); // Disable save button after reset
     } else {
       NotificationManager.error(`Error resetting settings: ${result.error.message}`);
     }
