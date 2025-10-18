@@ -1,10 +1,39 @@
 import React, { useState, useEffect, useRef } from 'react';
 
+interface AnalysisProgress {
+  current: number;
+  total: number;
+}
+
+interface UndoRedo {
+  canUndo: boolean;
+  canRedo: boolean;
+  undo: () => void;
+  redo: () => void;
+  undoDescription?: string;
+  redoDescription?: string;
+}
+
+interface HeaderProps {
+  hasChanges: boolean;
+  onApply: () => void;
+  onCancel: () => void;
+  onAnalyze: () => void;
+  isApplying: boolean;
+  isAnalyzing: boolean;
+  analysisProgress: AnalysisProgress | null;
+  onSearchChange: (searchTerm: string) => void;
+  undoRedo: UndoRedo;
+  onClearCache: () => void;
+  onCopyDebug: () => void;
+  showAdvancedOptions: boolean;
+}
+
 // Header Component with Search, Apply/Cancel/Analyze/Undo/Redo buttons
-function Header({ hasChanges, onApply, onCancel, onAnalyze, isApplying, isAnalyzing, analysisProgress, onSearchChange, undoRedo, onClearCache, onCopyDebug, showAdvancedOptions }) {
+function Header({ hasChanges, onApply, onCancel, onAnalyze, isApplying, isAnalyzing, analysisProgress, onSearchChange, undoRedo, onClearCache, onCopyDebug, showAdvancedOptions }: HeaderProps): JSX.Element {
   const logoUrl = chrome.runtime.getURL('icons/icon32.png');
-  const [searchTerm, setSearchTerm] = useState('');
-  const searchTimeout = useRef(null);
+  const [searchTerm, setSearchTerm] = useState<string>('');
+  const searchTimeout = useRef<NodeJS.Timeout | null>(null);
 
   // Debounced search (300ms)
   useEffect(() => {
@@ -23,7 +52,7 @@ function Header({ hasChanges, onApply, onCancel, onAnalyze, isApplying, isAnalyz
     };
   }, [searchTerm, onSearchChange]);
 
-  const handleClearSearch = () => {
+  const handleClearSearch = (): void => {
     setSearchTerm('');
   };
 
@@ -79,7 +108,7 @@ function Header({ hasChanges, onApply, onCancel, onAnalyze, isApplying, isAnalyz
           disabled={isApplying || isAnalyzing}
           title="Analyze tabs and generate AI grouping suggestions (double-click to force refresh)"
         >
-          {isAnalyzing && analysisProgress?.total > 0
+          {isAnalyzing && analysisProgress?.total && analysisProgress.total > 0
             ? `🤖 Analyzing ${analysisProgress.current}/${analysisProgress.total}...`
             : isAnalyzing
             ? '🤖 Analyzing...'
