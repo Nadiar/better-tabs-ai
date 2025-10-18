@@ -8,19 +8,10 @@ import SortableTabCard from './SortableTabCard';
 const UngroupedColumn = React.memo(function UngroupedColumn({ tabs, duplicateTabs, suggestions, onFindGroup, selectedTabs, onSelectTab }) {
   // Memoize filtered tabs to avoid recalculating on every render
   const ungroupedTabs = useMemo(() => {
-    // Get all tab IDs that are in suggestions
-    const suggestedTabIds = new Set();
-    if (suggestions && Array.isArray(suggestions)) {
-      suggestions.forEach(suggestion => {
-        if (suggestion.tabIds && Array.isArray(suggestion.tabIds)) {
-          suggestion.tabIds.forEach(id => suggestedTabIds.add(id));
-        }
-      });
-    }
-
-    // Filter to ungrouped tabs that are NOT in suggestions
-    return tabs.filter(tab => tab.groupId === -1 && !suggestedTabIds.has(tab.id));
-  }, [tabs, suggestions]);
+    // Simply filter to ungrouped tabs - suggestions don't matter here
+    // If a tab has groupId === -1, it belongs in this column, period
+    return tabs.filter(tab => tab.groupId === -1 || tab.groupId === chrome.tabGroups.TAB_GROUP_ID_NONE);
+  }, [tabs]);
 
   const { setNodeRef, isOver } = useDroppable({
     id: 'ungrouped-column'

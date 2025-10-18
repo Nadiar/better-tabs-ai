@@ -90,7 +90,7 @@ function Layout() {
         const ephemeralGroupIds = draft.groups.filter(g => g.isSuggested).map(g => g.id);
         draft.tabs.forEach(tab => {
           if (ephemeralGroupIds.includes(tab.groupId)) {
-            tab.groupId = -1;
+            tab.groupId = chrome.tabGroups.TAB_GROUP_ID_NONE;
           }
         });
 
@@ -323,7 +323,7 @@ function Layout() {
       updateStaged((draft) => {
         const tab = draft.tabs.find(t => t.id === draggedTabId);
         if (tab) {
-          tab.groupId = -1;
+          tab.groupId = chrome.tabGroups.TAB_GROUP_ID_NONE;
         }
       });
     }
