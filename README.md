@@ -42,12 +42,9 @@ Complete drag-and-drop interface with AI-powered tab organization
 
 ### 🎬 Drag & Drop Workflow
 
-https://github.com/user-attachments/assets/drag-drop-demo.webm
+![Drag & Drop Demo](screenshots/drag_drop_animation.gif)
 
-<!-- Embedding video - will display on GitHub -->
-<video src="screenshots/drag-drop-demo.webm" controls></video>
-
-Drag tabs between groups with smooth visual feedback and staged changes - full drag-and-drop demonstration showing complete workflow from ungrouped to grouped
+Drag tabs between groups with smooth visual feedback and staged changes
 
 ### 🤖 AI Suggestions in Action
 
