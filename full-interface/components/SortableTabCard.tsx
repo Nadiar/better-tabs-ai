@@ -1,10 +1,21 @@
 import React from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { TabData } from '@shared';
 import { getFaviconUrl, getDomain, truncate } from '../utils/tab-helpers';
 
+interface SortableTabCardProps {
+  tab: TabData;
+  isSelected?: boolean;
+  isDuplicate?: boolean;
+  onSelect?: (tabId: number, e: React.MouseEvent) => void;
+  onFindGroup?: (tabId: number, e: React.MouseEvent) => void;
+  isDropTarget?: boolean;
+  dropPosition?: 'before' | 'after' | null;
+}
+
 // SortableTabCard - Wrapper for TabCard that makes it sortable within groups
-function SortableTabCard({ tab, isSelected, isDuplicate, onSelect, onFindGroup, isDropTarget, dropPosition }) {
+function SortableTabCard({ tab, isSelected, isDuplicate, onSelect, onFindGroup, isDropTarget, dropPosition }: SortableTabCardProps): JSX.Element {
   const {
     attributes,
     listeners,
@@ -48,8 +59,8 @@ function SortableTabCard({ tab, isSelected, isDuplicate, onSelect, onFindGroup, 
         src={getFaviconUrl(tab)}
         alt=""
         className="tab-favicon"
-        onError={(e) => {
-          e.target.src = chrome.runtime.getURL('icons/icon16.png');
+        onError={(e: React.SyntheticEvent<HTMLImageElement>) => {
+          e.currentTarget.src = chrome.runtime.getURL('icons/icon16.png');
         }}
       />
       <div className="tab-info">

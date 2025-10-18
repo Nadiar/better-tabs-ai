@@ -1,12 +1,22 @@
 import React, { useState } from 'react';
 import { useDraggable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
+import { TabData } from '@shared';
+import { getFaviconUrl, getDomain, truncate } from '../utils/tab-helpers';
 import Tooltip from './Tooltip';
 
+interface TabCardProps {
+  tab: TabData;
+  isSelected?: boolean;
+  isDuplicate?: boolean;
+  onSelect?: (tabId: number, e: React.MouseEvent) => void;
+  onFindGroup?: (tabId: number, e: React.MouseEvent) => void;
+}
+
 // Tab Card Component - Draggable tab with favicon and title
-function TabCard({ tab, isSelected, isDuplicate, onSelect, onFindGroup }) {
-  const [faviconLoaded, setFaviconLoaded] = useState(false);
-  const [faviconError, setFaviconError] = useState(false);
+function TabCard({ tab, isSelected, isDuplicate, onSelect, onFindGroup }: TabCardProps): JSX.Element {
+  const [faviconLoaded, setFaviconLoaded] = useState<boolean>(false);
+  const [faviconError, setFaviconError] = useState<boolean>(false);
 
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: `tab-${tab.id}`,
@@ -17,28 +27,6 @@ function TabCard({ tab, isSelected, isDuplicate, onSelect, onFindGroup }) {
     transform: CSS.Translate.toString(transform),
     opacity: isDragging ? 0.5 : 1,
     cursor: isDragging ? 'grabbing' : 'grab'
-  };
-
-  const getFaviconUrl = (tab) => {
-    // Use tab's favIconUrl if available, otherwise fallback to extension icon
-    if (tab.favIconUrl && tab.favIconUrl.startsWith('http')) {
-      return tab.favIconUrl;
-    }
-    return chrome.runtime.getURL('icons/icon16.png');
-  };
-
-  const getDomain = (url) => {
-    try {
-      const urlObj = new URL(url);
-      return urlObj.hostname;
-    } catch {
-      return url;
-    }
-  };
-
-  const truncate = (str, maxLength) => {
-    if (!str) return '';
-    return str.length > maxLength ? str.substring(0, maxLength) + '...' : str;
   };
 
   return (
@@ -56,9 +44,9 @@ function TabCard({ tab, isSelected, isDuplicate, onSelect, onFindGroup }) {
           alt=""
           className={`tab-favicon ${!faviconLoaded && !faviconError ? 'loading' : ''}`}
           onLoad={() => setFaviconLoaded(true)}
-          onError={(e) => {
+          onError={(e: React.SyntheticEvent<HTMLImageElement>) => {
             setFaviconError(true);
-            e.target.src = chrome.runtime.getURL('icons/icon16.png');
+            e.currentTarget.src = chrome.runtime.getURL('icons/icon16.png');
           }}
         />
         <div className="tab-info">

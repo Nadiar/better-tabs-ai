@@ -1,14 +1,26 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, ReactNode } from 'react';
+import { TabData } from '@shared';
+import { truncate } from '../utils/tab-helpers';
+
+interface TooltipProps {
+  children: ReactNode;
+  tab?: TabData;
+}
+
+interface Position {
+  top: number;
+  left: number;
+}
 
 // Tooltip Component - Shows full tab title and URL on hover
-function Tooltip({ children, tab }) {
-  const [isVisible, setIsVisible] = useState(false);
-  const [position, setPosition] = useState({ top: 0, left: 0 });
-  const triggerRef = useRef(null);
-  const tooltipRef = useRef(null);
-  const timeoutRef = useRef(null);
+function Tooltip({ children, tab }: TooltipProps): JSX.Element {
+  const [isVisible, setIsVisible] = useState<boolean>(false);
+  const [position, setPosition] = useState<Position>({ top: 0, left: 0 });
+  const triggerRef = useRef<HTMLDivElement>(null);
+  const tooltipRef = useRef<HTMLDivElement>(null);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  const showTooltip = (e) => {
+  const showTooltip = (e: React.MouseEvent): void => {
     // Clear any existing timeout
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
@@ -40,7 +52,7 @@ function Tooltip({ children, tab }) {
     }, 500);
   };
 
-  const hideTooltip = () => {
+  const hideTooltip = (): void => {
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
     }
@@ -55,12 +67,7 @@ function Tooltip({ children, tab }) {
     };
   }, []);
 
-  if (!tab) return children;
-
-  const truncate = (str, maxLength) => {
-    if (!str) return '';
-    return str.length > maxLength ? str.substring(0, maxLength) + '...' : str;
-  };
+  if (!tab) return <>{children}</>;
 
   return (
     <>
