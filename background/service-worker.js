@@ -159,6 +159,8 @@ class CacheManager {
 }
 
 // Default Settings (Phase E)
+const PROMPT_VERSION = 2; // Increment when updating DEFAULT_AI_PROMPT_RULES
+
 const DEFAULT_AI_PROMPT_RULES = `CRITICAL RULES:
 1. **TOPIC MATCHING**: Tabs MUST be about the SAME specific topic/activity to be grouped
    - ❌ BAD: "Google Messages" + "Zillow house listings" (completely different purposes)
@@ -204,6 +206,8 @@ const DEFAULT_SETTINGS = {
   maxSuggestions: 10,              // Maximum suggestions to show
   minTabsForSuggestion: 2,         // Minimum tabs needed to suggest a group
   customAIPromptRules: DEFAULT_AI_PROMPT_RULES, // Customizable AI prompt rules
+  promptVersion: PROMPT_VERSION,   // Track which version of prompt is in use
+  promptCustomized: false,         // Whether user has customized the prompt
 
   // UI Preferences
   showConfidenceScores: true,      // Show percentage in UI
@@ -251,7 +255,32 @@ class BetterTabsAI {
     try {
       const result = await chrome.storage.sync.get('betterTabsSettings');
       if (result.betterTabsSettings) {
-        this.settings = { ...DEFAULT_SETTINGS, ...result.betterTabsSettings };
+        const saved = result.betterTabsSettings;
+        this.settings = { ...DEFAULT_SETTINGS, ...saved };
+
+        // Check for prompt version mismatch (prompt update available)
+        if (!saved.promptVersion || saved.promptVersion < PROMPT_VERSION) {
+          console.log(`🆕 Prompt update available (v${saved.promptVersion || 1} → v${PROMPT_VERSION})`);
+
+          // If user has NOT customized the prompt, auto-update to new default
+          if (!saved.promptCustomized) {
+            console.log('⬆️ Auto-updating to new default prompt (user has not customized)');
+            this.settings.customAIPromptRules = DEFAULT_AI_PROMPT_RULES;
+            this.settings.promptVersion = PROMPT_VERSION;
+            await this.saveSettings(this.settings);
+          } else {
+            // User has customized - store update availability for UI notification
+            console.log('⚠️ Prompt update available but user has customizations');
+            await chrome.storage.local.set({
+              promptUpdateAvailable: {
+                oldVersion: saved.promptVersion || 1,
+                newVersion: PROMPT_VERSION,
+                timestamp: Date.now()
+              }
+            });
+          }
+        }
+
         console.log('📋 Loaded settings:', this.settings);
       } else {
         console.log('📋 Using default settings');
@@ -451,6 +480,17 @@ class BetterTabsAI {
 
         case 'getDefaultPromptRules':
           sendResponse({ success: true, defaultRules: DEFAULT_AI_PROMPT_RULES });
+          break;
+
+        case 'getPromptUpdateStatus':
+          const promptUpdate = await chrome.storage.local.get('promptUpdateAvailable');
+          sendResponse({
+            success: true,
+            updateAvailable: !!promptUpdate.promptUpdateAvailable,
+            updateInfo: promptUpdate.promptUpdateAvailable || null,
+            currentVersion: PROMPT_VERSION,
+            defaultRules: DEFAULT_AI_PROMPT_RULES
+          });
           break;
 
         case 'saveSettings':
