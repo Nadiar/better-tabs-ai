@@ -1,7 +1,12 @@
 import React from 'react';
 
+interface ConflictBannerProps {
+  onRefresh: () => void;
+  onIgnore: () => void;
+}
+
 // Conflict Banner - Shows when Chrome tabs change during editing
-function ConflictBanner({ onRefresh, onIgnore }) {
+function ConflictBanner({ onRefresh, onIgnore }: ConflictBannerProps): JSX.Element {
   return (
     <div className="conflict-banner">
       <span className="conflict-icon">⚠️</span>

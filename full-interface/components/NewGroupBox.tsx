@@ -2,7 +2,7 @@ import React from 'react';
 import { useDroppable } from '@dnd-kit/core';
 
 // New Group Box - Droppable area for creating new groups
-function NewGroupBox() {
+function NewGroupBox(): JSX.Element {
   const { setNodeRef, isOver } = useDroppable({
     id: 'new-group-box'
   });

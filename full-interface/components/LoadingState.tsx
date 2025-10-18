@@ -1,9 +1,7 @@
 import React from 'react';
 
 // Loading State Component with Skeleton Placeholders
-const { useMemo } = React;
-
-function LoadingState() {
+function LoadingState(): JSX.Element {
   return (
     <div className="loading-container">
       <div className="loading-header">

@@ -1,7 +1,13 @@
 import React from 'react';
 
+interface ProgressBarProps {
+  current: number;
+  total: number;
+  message: string;
+}
+
 // ProgressBar Component - Shows progress during Apply operations
-function ProgressBar({ current, total, message }) {
+function ProgressBar({ current, total, message }: ProgressBarProps): JSX.Element | null {
   if (total === 0) return null;
 
   const percentage = Math.round((current / total) * 100);

@@ -1,10 +1,19 @@
 import React from 'react';
+import { Toast, ToastType } from '@shared';
+
+interface ToastWithId extends Toast {
+  id: string | number;
+}
+
+interface ToastContainerProps {
+  toasts: ToastWithId[];
+}
 
 // Toast Container - Displays multiple toast notifications
-function ToastContainer({ toasts }) {
+function ToastContainer({ toasts }: ToastContainerProps): JSX.Element | null {
   if (!toasts || toasts.length === 0) return null;
 
-  const getIcon = (type) => {
+  const getIcon = (type: ToastType): string => {
     switch (type) {
       case 'success': return '✓';
       case 'error': return '✗';
