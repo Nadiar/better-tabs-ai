@@ -271,10 +271,11 @@ test.describe('Ephemeral Groups - Cancel Behavior', () => {
     // Click Cancel button
     const cancelButton = page.locator('button:has-text("Cancel")');
     await expect(cancelButton).toBeVisible();
+    await expect(cancelButton).toBeEnabled(); // Ensure button is clickable
     await cancelButton.click();
 
-    // Wait for cleanup to complete
-    await page.waitForTimeout(300);
+    // Wait for groups to be removed (React re-render)
+    await expect(page.locator('.group-container')).toHaveCount(0, { timeout: 5000 });
 
     // Verify ALL ephemeral groups removed
     const groupsAfter = await page.locator('.group-container').count();

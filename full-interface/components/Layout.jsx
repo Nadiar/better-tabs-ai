@@ -83,35 +83,33 @@ function Layout() {
     const ephemeralGroups = stagedState.groups.filter(g => g.isSuggested);
 
     if (ephemeralGroups.length > 0) {
-      const regularGroups = stagedState.groups.filter(g => !g.isSuggested);
-
-      // Simple check: if all groups are ephemeral OR we only added ephemeral groups to original state
-      const onlyEphemeralChanges = regularGroups.length === originalState.groups.length;
-
-      if (onlyEphemeralChanges) {
-        // ONLY ephemeral groups exist - remove them without confirmation
-        updateStaged((draft) => {
-          // Remove all ephemeral groups
-          const ephemeralGroupIds = draft.groups.filter(g => g.isSuggested).map(g => g.id);
-          draft.groups = draft.groups.filter(g => !g.isSuggested);
-
-          // Move tabs back to ungrouped
-          draft.tabs.forEach(tab => {
-            if (ephemeralGroupIds.includes(tab.groupId)) {
-              tab.groupId = -1;
-            }
-          });
+      // Remove all ephemeral groups without confirmation
+      // (User can always re-analyze if needed)
+      updateStaged((draft) => {
+        // First, move tabs back to ungrouped BEFORE removing groups
+        const ephemeralGroupIds = draft.groups.filter(g => g.isSuggested).map(g => g.id);
+        draft.tabs.forEach(tab => {
+          if (ephemeralGroupIds.includes(tab.groupId)) {
+            tab.groupId = -1;
+          }
         });
 
-        // Clear suggestions
-        if (suggestions) {
-          window.dispatchEvent(new CustomEvent('clearAllSuggestions'));
-        }
-        return; // Don't call resetToOriginal
+        // Then remove all ephemeral groups
+        draft.groups = draft.groups.filter(g => !g.isSuggested);
+      });
+
+      // Clear suggestions
+      if (suggestions) {
+        window.dispatchEvent(new CustomEvent('clearAllSuggestions'));
       }
+
+      // If there are other changes too, show confirmation for those
+      // Check if there are still changes after removing ephemeral groups
+      // We'll let hasChanges handle this naturally
+      return;
     }
 
-    // There are non-ephemeral changes - confirm before discarding ALL
+    // No ephemeral groups - confirm before discarding ALL changes
     if (confirm('Discard all changes?')) {
       resetToOriginal();
     }
