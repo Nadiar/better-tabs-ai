@@ -163,7 +163,7 @@ test.describe('Full Interface - Baseline Tests', () => {
     });
 
     await page.reload();
-    await expect(page.locator('.app-container, #root')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('.app-container')).toBeVisible({ timeout: 5000 });
 
     // Should have no critical JS errors
     expect(errors.length).toBe(0);
