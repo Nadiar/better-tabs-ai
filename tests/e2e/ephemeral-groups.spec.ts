@@ -234,11 +234,25 @@ test.describe('Ephemeral Groups - Creation', () => {
     // Button should be enabled initially
     await expect(analyzeButton).toBeEnabled();
 
+    // Start watching for disabled state BEFORE clicking
+    const disabledPromise = analyzeButton.evaluate(async (button) => {
+      // Poll for disabled state
+      const startTime = Date.now();
+      while (Date.now() - startTime < 2000) { // 2 second timeout
+        if (button.hasAttribute('disabled')) {
+          return true;
+        }
+        await new Promise(resolve => setTimeout(resolve, 10)); // Check every 10ms
+      }
+      return false;
+    });
+
     // Click analyze
     await analyzeButton.click();
 
-    // Button should be disabled immediately during analysis (500ms mock delay)
-    await expect(analyzeButton).toBeDisabled({ timeout: 1000 });
+    // Verify button was disabled at some point during analysis
+    const wasDisabled = await disabledPromise;
+    expect(wasDisabled).toBe(true);
 
     // Wait for analysis to complete
     await expect(page.locator('.group-container')).toHaveCount(2, { timeout: 10000 });
@@ -368,12 +382,15 @@ test.describe('Ephemeral Groups - Re-analysis Behavior', () => {
     // Get the titles of first analysis groups
     const firstAnalysisGroupTitles: string[] = [];
     for (let i = 0; i < groupsAfterFirst; i++) {
-      const title = await page.locator('.group-container').nth(i).locator('.group-title, .group-header').textContent();
+      const title = await page.locator('.group-container').nth(i).locator('.group-title').textContent();
       if (title) firstAnalysisGroupTitles.push(title.trim());
     }
 
     // Second analysis - click Analyze again
     await analyzeButton.click();
+
+    // Wait for old groups to be cleared first (analyzeTabs clears ephemeral groups before creating new ones)
+    // The groups should temporarily disappear or stay at the same count
     await page.waitForLoadState('networkidle');
 
     // Wait for groups to be recreated
