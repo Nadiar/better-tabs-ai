@@ -40,7 +40,7 @@ def convert_webm_to_apng(input_path, output_path, fps=10, scale=1.0):
 
     # Resize if needed
     if scale != 1.0:
-        clip = clip.resize(scale)
+        clip = clip.resized(scale)
 
     # Extract frames
     frames = []
@@ -81,4 +81,6 @@ if __name__ == "__main__":
         print(f"Error: Input file not found: {input_file}")
         sys.exit(1)
 
-    convert_webm_to_apng(input_file, output_file, fps=10, scale=1.0)
+    # Try smaller scale and lower fps for reasonable file size
+    print("Generating optimized APNG (scale=0.5, fps=6)...")
+    convert_webm_to_apng(input_file, output_file, fps=6, scale=0.5)
