@@ -1,9 +1,18 @@
 import React from 'react';
+import { TabData, GroupData } from '@shared';
 import GroupContainer from './GroupContainer';
 import { useStagedStateContext } from '../app';
 
+interface GroupsColumnProps {
+  groups: GroupData[];
+  tabs: TabData[];
+  duplicateTabs?: number[];
+  activeDropTarget: string | null;
+  dropPosition: 'before' | 'after' | null;
+}
+
 // Groups Column - Center column showing all groups (both regular and suggested)
-function GroupsColumn({ groups, tabs, duplicateTabs = [], activeDropTarget, dropPosition }) {
+function GroupsColumn({ groups, tabs, duplicateTabs = [], activeDropTarget, dropPosition }: GroupsColumnProps): JSX.Element {
   const { updateStaged } = useStagedStateContext();
 
   // Separate ephemeral (suggested) groups from regular groups
@@ -13,7 +22,7 @@ function GroupsColumn({ groups, tabs, duplicateTabs = [], activeDropTarget, drop
   // Display suggested groups first, then regular groups
   const allGroups = [...suggestedGroups, ...regularGroups];
 
-  const handleDismissGroup = (groupId) => {
+  const handleDismissGroup = (groupId: number): void => {
     // Remove the ephemeral group
     updateStaged((draft) => {
       // Ungroup all tabs in this group

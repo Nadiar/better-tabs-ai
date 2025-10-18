@@ -1,11 +1,23 @@
 import React, { useState } from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { TabData, AISuggestion, ChromeColor } from '@shared';
 import SortableTabCard from './SortableTabCard';
 
+interface SuggestedGroupProps {
+  suggestion: AISuggestion;
+  tabs: TabData[];
+  onCreate: () => void;
+  onDismiss: () => void;
+  onRegenerateName: (index: number, newName: string) => void;
+  duplicateTabs?: number[];
+  suggestionIndex: number;
+  activeDropTarget: string | null;
+  dropPosition: 'before' | 'after' | null;
+}
 
 // Suggested Group - Displays an AI-generated grouping suggestion
-function SuggestedGroup({ suggestion, tabs, onCreate, onDismiss, onRegenerateName, duplicateTabs = [], suggestionIndex, activeDropTarget, dropPosition }) {
+function SuggestedGroup({ suggestion, tabs, onCreate, onDismiss, onRegenerateName, duplicateTabs = [], suggestionIndex, activeDropTarget, dropPosition }: SuggestedGroupProps): JSX.Element {
   const suggestedTabs = tabs.filter(tab => suggestion.tabIds?.includes(tab.id));
   const [isGeneratingName, setIsGeneratingName] = useState(false);
 
@@ -15,7 +27,7 @@ function SuggestedGroup({ suggestion, tabs, onCreate, onDismiss, onRegenerateNam
     data: { suggestion, suggestionIndex }
   });
 
-  const handleRegenerateName = async () => {
+  const handleRegenerateName = async (): Promise<void> => {
     if (isGeneratingName || suggestedTabs.length === 0) return;
 
     setIsGeneratingName(true);
@@ -41,7 +53,7 @@ function SuggestedGroup({ suggestion, tabs, onCreate, onDismiss, onRegenerateNam
     }
   };
 
-  const getGroupColor = (color) => {
+  const getGroupColor = (color: ChromeColor | undefined): string => {
     const colors = {
       grey: '#5f6368',
       blue: '#1a73e8',
@@ -133,7 +145,7 @@ function SuggestedGroup({ suggestion, tabs, onCreate, onDismiss, onRegenerateNam
 }
 
 // Memoize with custom comparison to prevent unnecessary re-renders
-export default React.memo(SuggestedGroup, (prevProps, nextProps) => {
+export default React.memo(SuggestedGroup, (prevProps: SuggestedGroupProps, nextProps: SuggestedGroupProps) => {
   // Only re-render if suggestion data or relevant tabs changed
   return (
     prevProps.suggestion.groupName === nextProps.suggestion.groupName &&

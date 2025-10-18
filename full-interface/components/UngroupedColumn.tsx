@@ -1,11 +1,20 @@
 import React, { useMemo } from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { TabData, AISuggestion } from '@shared';
 import SortableTabCard from './SortableTabCard';
 
+interface UngroupedColumnProps {
+  tabs: TabData[];
+  duplicateTabs: number[];
+  suggestions: AISuggestion[] | null;
+  onFindGroup: (tabId: number, e: React.MouseEvent) => void;
+  selectedTabs: number[];
+  onSelectTab: (tabId: number, e: React.MouseEvent) => void;
+}
 
 // Ungrouped Tabs Column - Droppable area for ungrouped tabs
-const UngroupedColumn = React.memo(function UngroupedColumn({ tabs, duplicateTabs, suggestions, onFindGroup, selectedTabs, onSelectTab }) {
+const UngroupedColumn = React.memo(function UngroupedColumn({ tabs, duplicateTabs, suggestions, onFindGroup, selectedTabs, onSelectTab }: UngroupedColumnProps): JSX.Element {
   // Memoize filtered tabs to avoid recalculating on every render
   const ungroupedTabs = useMemo(() => {
     // Simply filter to ungrouped tabs - suggestions don't matter here

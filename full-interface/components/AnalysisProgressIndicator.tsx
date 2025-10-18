@@ -1,5 +1,16 @@
 import React, { useState, useEffect } from 'react';
 
+interface AnalysisProgress {
+  current: number;
+  total: number;
+  status: 'idle' | 'summarizing' | 'grouping' | 'complete' | 'error';
+}
+
+interface AnalysisProgressIndicatorProps {
+  isAnalyzing: boolean;
+  progress: AnalysisProgress;
+}
+
 /**
  * AnalysisProgressIndicator - Shows detailed progress during tab analysis
  *
@@ -10,10 +21,10 @@ import React, { useState, useEffect } from 'react';
  * - Time estimation
  * - Expandable details section
  */
-function AnalysisProgressIndicator({ isAnalyzing, progress }) {
-  const [startTime, setStartTime] = useState(null);
-  const [estimatedTimeRemaining, setEstimatedTimeRemaining] = useState(null);
-  const [isExpanded, setIsExpanded] = useState(false);
+function AnalysisProgressIndicator({ isAnalyzing, progress }: AnalysisProgressIndicatorProps): JSX.Element | null {
+  const [startTime, setStartTime] = useState<number | null>(null);
+  const [estimatedTimeRemaining, setEstimatedTimeRemaining] = useState<number | null>(null);
+  const [isExpanded, setIsExpanded] = useState<boolean>(false);
 
   // Track start time when analysis begins
   useEffect(() => {
@@ -79,7 +90,7 @@ function AnalysisProgressIndicator({ isAnalyzing, progress }) {
   const statusMessage = statusMessages[status] || 'Analyzing...';
 
   // Format time remaining
-  const formatTimeRemaining = (seconds) => {
+  const formatTimeRemaining = (seconds: number | null): string | null => {
     if (!seconds || seconds < 1) return null;
     if (seconds < 60) return `~${seconds}s`;
     const minutes = Math.ceil(seconds / 60);
