@@ -98,7 +98,7 @@ test.describe('Popup Interface - Baseline Tests', () => {
   test.beforeEach(async ({ page }) => {
     await injectChromeMock(page);
     await page.goto('http://127.0.0.1:8081/popup-react/dist/index.html');
-    await expect(page.locator('header, #aiStatus')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('header')).toBeVisible({ timeout: 5000 });
   });
 
   test('should load popup interface successfully', async ({ page }) => {
@@ -176,7 +176,7 @@ test.describe('Popup Interface - Baseline Tests', () => {
 
     // Trigger various interactions
     await page.reload();
-    await expect(page.locator('header, #aiStatus')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('header')).toBeVisible({ timeout: 5000 });
 
     // Should have minimal or no errors
     // (Some errors might be expected from Chrome extension APIs in file:// protocol)
@@ -188,7 +188,7 @@ test.describe('Popup Interface - Mock AI Interactions', () => {
   test.beforeEach(async ({ page }) => {
     await injectChromeMock(page);
     await page.goto('http://127.0.0.1:8081/popup-react/dist/index.html');
-    await expect(page.locator('header, #aiStatus')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('header')).toBeVisible({ timeout: 5000 });
   });
 
   test('should receive mocked AI analysis response', async ({ page }) => {
@@ -235,7 +235,7 @@ test.describe('Popup Interface - Regression Tests', () => {
   test.beforeEach(async ({ page }) => {
     await injectChromeMock(page);
     await page.goto('http://127.0.0.1:8081/popup-react/dist/index.html');
-    await expect(page.locator('header, #aiStatus')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('header')).toBeVisible({ timeout: 5000 });
   });
 
   test('should not have JavaScript errors on load', async ({ page }) => {
@@ -245,7 +245,7 @@ test.describe('Popup Interface - Regression Tests', () => {
     });
 
     await page.reload();
-    await expect(page.locator('header, #aiStatus')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('header')).toBeVisible({ timeout: 5000 });
 
     // Should have no JS errors
     expect(errors.length).toBe(0);
