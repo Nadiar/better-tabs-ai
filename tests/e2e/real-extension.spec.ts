@@ -68,7 +68,7 @@ test.describe('Real Extension Tests', () => {
 
     try {
       await page.goto(`chrome-extension://${extensionId}/popup-react/dist/index.html`);
-      await expect(page.locator('#root, header')).toBeVisible({ timeout: 5000 });
+      await expect(page.locator('#root')).toBeVisible({ timeout: 5000 });
 
       // Check if popup loaded
       const title = await page.title();

@@ -98,7 +98,7 @@ test.describe('Full Interface - Baseline Tests', () => {
   test.beforeEach(async ({ page }) => {
     await injectChromeMock(page);
     await page.goto('http://127.0.0.1:8081/full-interface/dist/index.html');
-    await expect(page.locator('.app-container, #root')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('.app-container')).toBeVisible({ timeout: 5000 });
   });
 
   test('should load full interface successfully', async ({ page }) => {
@@ -174,7 +174,7 @@ test.describe('Full Interface - Drag & Drop Baseline', () => {
   test.beforeEach(async ({ page }) => {
     await injectChromeMock(page);
     await page.goto('http://127.0.0.1:8081/full-interface/dist/index.html');
-    await expect(page.locator('.app-container, #root')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('.app-container')).toBeVisible({ timeout: 5000 });
   });
 
   test('should display tab cards', async ({ page }) => {
@@ -216,7 +216,7 @@ test.describe('Full Interface - AI Integration Baseline', () => {
   test.beforeEach(async ({ page }) => {
     await injectChromeMock(page);
     await page.goto('http://127.0.0.1:8081/full-interface/dist/index.html');
-    await expect(page.locator('.app-container, #root')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('.app-container')).toBeVisible({ timeout: 5000 });
   });
 
   test('should have AI analyze button', async ({ page }) => {
@@ -267,7 +267,7 @@ test.describe('Full Interface - Staged Changes Baseline', () => {
   test.beforeEach(async ({ page }) => {
     await injectChromeMock(page);
     await page.goto('http://127.0.0.1:8081/full-interface/dist/index.html');
-    await expect(page.locator('.app-container, #root')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('.app-container')).toBeVisible({ timeout: 5000 });
   });
 
   test('should have Apply Changes button', async ({ page }) => {
@@ -321,7 +321,7 @@ test.describe('Full Interface - Regression Tests', () => {
     });
 
     await page.goto('http://127.0.0.1:8081/full-interface/dist/index.html');
-    await expect(page.locator('.app-container, #root')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('.app-container')).toBeVisible({ timeout: 5000 });
 
     // Filter out expected Chrome extension errors and mock-related errors
     const criticalErrors = errors.filter(
