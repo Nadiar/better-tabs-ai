@@ -49,56 +49,69 @@ function Layout() {
   }, [stagedState.tabs.length]);
 
   const handleApply = async () => {
-    // If there are AI suggestions, prompt user to apply them first
-    if (suggestions && suggestions.length > 0) {
-      const shouldContinue = confirm(
-        `You have ${suggestions.length} AI-suggested group${suggestions.length > 1 ? 's' : ''} pending.\n\n` +
-        `Would you like to create all suggested groups before applying changes?\n\n` +
-        `• OK - Create suggested groups and apply all changes\n` +
-        `• Cancel - Just apply your manual changes (skip suggestions)`
-      );
+    // Check if there are ephemeral groups in staged state
+    const ephemeralGroups = stagedState.groups.filter(g => g.isSuggested);
 
-      if (!shouldContinue) {
-        // User chose Cancel - just apply without creating suggestions
-        await applyChanges();
-        return;
-      }
-
-      // User chose OK - apply all suggestions first
-      suggestions.forEach((suggestion) => {
-        if (suggestion.tabIds && suggestion.tabIds.length > 0) {
-          updateStaged((draft) => {
-            // Generate new group ID
-            const newGroupId = Math.min(...draft.groups.map(g => g.id), -1) - 1;
-
-            // Create new group
-            const newGroup = {
-              id: newGroupId,
-              title: suggestion.groupName,
-              color: suggestion.color || 'grey',
-              collapsed: false
-            };
-            draft.groups.push(newGroup);
-
-            // Move suggested tabs to new group
-            suggestion.tabIds.forEach(tabId => {
-              const tab = draft.tabs.find(t => t.id === tabId);
-              if (tab) {
-                tab.groupId = newGroupId;
-              }
-            });
-          });
-        }
+    if (ephemeralGroups.length > 0) {
+      // Convert all ephemeral groups to permanent by removing isSuggested flag
+      // This happens BEFORE applying to Chrome - user can still edit before final apply
+      updateStaged((draft) => {
+        draft.groups.forEach(group => {
+          if (group.isSuggested) {
+            delete group.isSuggested;
+            delete group.confidence; // Also remove confidence score
+          }
+        });
       });
 
-      // Clear suggestions after applying them
-      window.dispatchEvent(new CustomEvent('clearAllSuggestions'));
+      // Clear suggestions from state
+      if (suggestions) {
+        window.dispatchEvent(new CustomEvent('clearAllSuggestions'));
+      }
+
+      // Don't auto-apply to Chrome - let user review the permanent groups first
+      // They can click Apply again when ready
+      return;
     }
 
+    // No ephemeral groups - proceed with normal apply to Chrome
     await applyChanges();
   };
 
   const handleCancel = () => {
+    // Check if there are ephemeral groups
+    const ephemeralGroups = stagedState.groups.filter(g => g.isSuggested);
+
+    if (ephemeralGroups.length > 0) {
+      const regularGroups = stagedState.groups.filter(g => !g.isSuggested);
+
+      // Simple check: if all groups are ephemeral OR we only added ephemeral groups to original state
+      const onlyEphemeralChanges = regularGroups.length === originalState.groups.length;
+
+      if (onlyEphemeralChanges) {
+        // ONLY ephemeral groups exist - remove them without confirmation
+        updateStaged((draft) => {
+          // Remove all ephemeral groups
+          const ephemeralGroupIds = draft.groups.filter(g => g.isSuggested).map(g => g.id);
+          draft.groups = draft.groups.filter(g => !g.isSuggested);
+
+          // Move tabs back to ungrouped
+          draft.tabs.forEach(tab => {
+            if (ephemeralGroupIds.includes(tab.groupId)) {
+              tab.groupId = -1;
+            }
+          });
+        });
+
+        // Clear suggestions
+        if (suggestions) {
+          window.dispatchEvent(new CustomEvent('clearAllSuggestions'));
+        }
+        return; // Don't call resetToOriginal
+      }
+    }
+
+    // There are non-ephemeral changes - confirm before discarding ALL
     if (confirm('Discard all changes?')) {
       resetToOriginal();
     }

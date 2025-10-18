@@ -590,6 +590,18 @@ function App() {
   };
 
   const analyzeTabs = async () => {
+    const MIN_ANALYSIS_DISPLAY_MS = 300; // Show analyzing state for at least 300ms
+    const startTime = Date.now();
+
+    // Helper to ensure minimum display time before disabling
+    const finishAnalyzing = async () => {
+      const elapsed = Date.now() - startTime;
+      if (elapsed < MIN_ANALYSIS_DISPLAY_MS) {
+        await new Promise(resolve => setTimeout(resolve, MIN_ANALYSIS_DISPLAY_MS - elapsed));
+      }
+      setIsAnalyzing(false);
+    };
+
     setIsAnalyzing(true);
     setAnalysisProgress({ current: 0, total: 0, status: 'summarizing' }); // Initialize with summarizing status
     setSuggestions(null); // Clear old suggestions when starting new analysis
@@ -612,14 +624,14 @@ function App() {
 
       if (!result.success) {
         NotificationManager.error(`Analysis failed: ${result.error.message}`);
-        setIsAnalyzing(false);
+        await finishAnalyzing();
         return;
       }
 
       // Check if no tabs to analyze
       if (result.data.analyses?.length === 0 && result.data.suggestions?.length === 0) {
         NotificationManager.info(result.data.message || 'No tabs to analyze');
-        setIsAnalyzing(false);
+        await finishAnalyzing();
         return;
       }
 
@@ -647,14 +659,14 @@ function App() {
           } else if (refreshResult.suggestions) {
             setSuggestionsAndConvert(refreshResult.suggestions);
             NotificationManager.success(`Found ${refreshResult.suggestions.length} grouping suggestions`);
-            setIsAnalyzing(false);
+            await finishAnalyzing();
           }
         } else {
           // First click - use cached results
           const cachedSuggestions = result.data.suggestions || [];
           setSuggestionsAndConvert(cachedSuggestions);
           NotificationManager.success((result.data as any).message || 'Analysis complete (cached)' + ' - Click again to force refresh');
-          setIsAnalyzing(false);
+          await finishAnalyzing();
         }
       } else if ((result.data as any).started) {
         // Background analysis started - poll for results
@@ -668,12 +680,12 @@ function App() {
         setLastAnalysisClick(Date.now());
         setSuggestionsAndConvert(result.data.suggestions);
         NotificationManager.success(`Found ${result.data.suggestions.length} grouping suggestions`);
-        setIsAnalyzing(false);
+        await finishAnalyzing();
       }
     } catch (error) {
       console.error('Error analyzing tabs:', error);
       NotificationManager.error(`Analysis error: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      setIsAnalyzing(false);
+      await finishAnalyzing();
     }
   };
 
