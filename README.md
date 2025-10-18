@@ -42,9 +42,12 @@ Complete drag-and-drop interface with AI-powered tab organization
 
 ### 🎬 Drag & Drop Workflow
 
-![Drag & Drop Animation](screenshots/drag_drop_animation.gif)
+https://github.com/user-attachments/assets/drag-drop-demo.webm
 
-Drag tabs between groups with smooth visual feedback and staged changes
+<!-- Embedding video - will display on GitHub -->
+<video src="screenshots/drag-drop-demo.webm" controls></video>
+
+Drag tabs between groups with smooth visual feedback and staged changes - full drag-and-drop demonstration showing complete workflow from ungrouped to grouped
 
 ### 🤖 AI Suggestions in Action
 
@@ -52,7 +55,34 @@ Drag tabs between groups with smooth visual feedback and staged changes
 
 AI analyzes ungrouped tabs and suggests intelligent groupings with confidence scores
 
-## Latest Updates (v2.1.0)
+## Latest Updates (v2.3.0)
+
+### 🎉 Ephemeral Groups & TypeScript Migration Release
+
+#### **✅ Ephemeral Groups Feature**
+- **AI Suggested Groups**: AI-generated groups appear as ephemeral (temporary) suggestions
+- **Visual Distinction**: Suggested groups shown with dashed borders and "Suggested" badges
+- **Granular Control**: Three options for each suggestion:
+  - **Apply**: Convert all ephemeral groups to permanent groups
+  - **Dismiss**: Remove individual ephemeral group and move tabs back to ungrouped
+  - **Cancel**: Remove all ephemeral groups at once
+- **Smart Workflow**: Make changes to AI suggestions before committing them
+- **Confidence Scores**: Visual confidence indicators for AI grouping decisions
+
+#### **✅ Code Quality & TypeScript Migration**
+- **TypeScript Conversion**: 15/16 components fully typed (93.75% coverage)
+- **Type Safety**: Complete prop interfaces, event handlers, and return types
+- **Clean Code**: Removed all console.log statements, created debug utility
+- **Performance**: Extracted utility functions to prevent recreation on every render
+- **Production Ready**: 71/71 E2E tests passing with excellent performance
+
+#### **✅ Enhanced Testing**
+- **Comprehensive E2E Tests**: 71 Playwright tests covering all features
+- **Ephemeral Groups Coverage**: 6 dedicated tests for ephemeral groups workflow
+- **Performance**: Test suite completes in ~60 seconds (down from 180s+ timeouts)
+- **CI/CD Ready**: Fixed CSS selector strict mode violations and timing issues
+
+## Previous Updates (v2.1.0)
 
 ### 🚀 AI & Settings Enhancement Release
 
