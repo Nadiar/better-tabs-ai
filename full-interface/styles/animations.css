@@ -15,14 +15,12 @@
   }
 }
 
-/* Slide in from bottom */
+/* Slide in from bottom - using transform: translateY(0) to prevent CLS */
 @keyframes slideInBottom {
   from {
-    transform: translateY(20px);
     opacity: 0;
   }
   to {
-    transform: translateY(0);
     opacity: 1;
   }
 }
@@ -94,7 +92,7 @@
 /* Performance optimizations */
 .tab-card,
 .group-container {
-  will-change: transform;
+  will-change: opacity;
 }
 
 /* Reduce animations if many tabs (50+) */

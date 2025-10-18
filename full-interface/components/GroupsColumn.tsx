@@ -16,7 +16,12 @@ function GroupsColumn({ groups, tabs, duplicateTabs = [], activeDropTarget, drop
   const { updateStaged } = useStagedStateContext();
 
   // Separate ephemeral (suggested) groups from regular groups
-  const suggestedGroups = groups.filter(g => g.isSuggested);
+  // Filter out empty suggested groups (groups with 0 tabs)
+  const suggestedGroups = groups.filter(g => {
+    if (!g.isSuggested) return false;
+    const tabCount = tabs.filter(t => t.groupId === g.id).length;
+    return tabCount > 0;
+  });
   const regularGroups = groups.filter(g => !g.isSuggested);
 
   // Display suggested groups first, then regular groups
