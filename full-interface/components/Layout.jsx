@@ -9,6 +9,7 @@ import NewGroupBox from './NewGroupBox';
 import TabCard from './TabCard';
 import ToastContainer from './Toast';
 import ProgressBar from './ProgressBar';
+import { debug, debugError } from '../utils/debug';
 
 
 // Layout Component - Main 3-column layout with drag & drop
@@ -129,7 +130,7 @@ function Layout() {
   const handleDragStart = (event) => {
     const draggedTabId = parseInt(event.active.id.replace('tab-', ''), 10);
     if (isNaN(draggedTabId)) {
-      console.error('Invalid tab ID format in drag start:', event.active.id);
+      debugError('Invalid tab ID format in drag start:', event.active.id);
       return;
     }
     const tab = stagedState.tabs.find(t => t.id === draggedTabId);
@@ -194,20 +195,20 @@ function Layout() {
 
       const draggedTabId = parseInt(active.id.replace('tab-', ''), 10);
       if (isNaN(draggedTabId)) {
-        console.error('Invalid tab ID format in drag end:', active.id);
+        debugError('Invalid tab ID format in drag end:', active.id);
         return;
       }
 
       const dropTarget = over.id;
 
-      console.log('Drag end:', { draggedTabId, dropTarget, activeId: active.id, overId: over.id });
+      debug('Drag end:', { draggedTabId, dropTarget, activeId: active.id, overId: over.id });
 
 
       // Reordering within same group (sortable) or moving to different group with position
       if (dropTarget.startsWith('tab-')) {
         const overTabId = parseInt(dropTarget.replace('tab-', ''), 10);
         if (isNaN(overTabId)) {
-          console.error('Invalid over tab ID format:', dropTarget);
+          debugError('Invalid over tab ID format:', dropTarget);
           return;
         }
 
@@ -251,7 +252,7 @@ function Layout() {
           // Chrome manages tab indices automatically when we apply changes
           // The tabs array order is just for our UI representation
 
-          console.log('Reordered tabs:', {
+          debug('Reordered tabs:', {
             draggedTabId,
             overTabId,
             from: draggedTabIndex,
@@ -266,7 +267,7 @@ function Layout() {
     else if (dropTarget.startsWith('group-')) {
       const groupId = parseInt(dropTarget.replace('group-', ''), 10);
       if (isNaN(groupId)) {
-        console.error('Invalid group ID format:', dropTarget);
+        debugError('Invalid group ID format:', dropTarget);
         return;
       }
 
@@ -279,7 +280,7 @@ function Layout() {
     }
     // Tab dropped on "New Group" box
     else if (dropTarget === 'new-group-box') {
-      console.log('Creating new group for tab:', draggedTabId);
+      debug('Creating new group for tab:', draggedTabId);
       updateStaged((draft) => {
         // Create new group with unique negative ID (will be replaced on Apply)
         const newGroupId = Math.min(...draft.groups.map(g => g.id), -1) - 1;
@@ -300,19 +301,19 @@ function Layout() {
         };
         draft.groups.push(newGroup);
 
-        console.log('Created new group:', newGroup);
+        debug('Created new group:', newGroup);
 
         // Move tab to new group
         const tab = draft.tabs.find(t => t.id === draggedTabId);
         if (tab) {
           const oldGroupId = tab.groupId;
           tab.groupId = newGroupId;
-          console.log(`Moved tab ${draggedTabId} from group ${oldGroupId} to new group ${newGroupId}`);
+          debug(`Moved tab ${draggedTabId} from group ${oldGroupId} to new group ${newGroupId}`);
         } else {
-          console.error('Tab not found:', draggedTabId);
+          debugError('Tab not found:', draggedTabId);
         }
 
-        console.log('Draft state after new group:', {
+        debug('Draft state after new group:', {
           groups: draft.groups.length,
           newGroupTabs: draft.tabs.filter(t => t.groupId === newGroupId).length
         });
@@ -328,7 +329,7 @@ function Layout() {
       });
     }
     } catch (error) {
-      console.error('Drag end error:', error);
+      debugError('Drag end error:', error);
       // Ensure activeTab is always cleared even on error
       setActiveTab(null);
     }

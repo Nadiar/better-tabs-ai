@@ -23,6 +23,7 @@ import "./styles/layout.css";
 import "./styles/drag-drop.css";
 import "./styles/animations.css";
 import "./styles/progress-indicator.css";
+import { debug, debugWarn, debugError } from './utils/debug';
 
 // Progress tracking types
 interface ApplyProgress {
@@ -131,18 +132,18 @@ function App() {
     const handleTabUpdate = () => {
       // Ignore events during Apply (we're making the changes ourselves)
       if (isApplyingRef.current) {
-        console.log('Ignoring Chrome event during Apply');
+        debug('Ignoring Chrome event during Apply');
         return;
       }
 
       // Use ref to get current value (avoid stale closure)
       if (!hasChangesRef.current) {
         // Only auto-refresh if there are no unsaved changes
-        console.log('Auto-refreshing: external Chrome change detected');
+        debug('Auto-refreshing: external Chrome change detected');
         loadChromeData();
       } else {
         // Show conflict banner if there are unsaved changes
-        console.log('Conflict detected: changes made externally while unsaved changes exist');
+        debug('Conflict detected: changes made externally while unsaved changes exist');
         setShowConflictBanner(true);
       }
     };
@@ -254,7 +255,7 @@ function App() {
         setSuggestionsAndConvert(response.results.suggestions);
       }
     } catch (error) {
-      console.error('Failed to load suggestions:', error);
+      debugError('Failed to load suggestions:', error);
     }
   };
 
@@ -285,7 +286,7 @@ function App() {
 
       setIsLoading(false);
     } catch (err) {
-      console.error('Failed to load Chrome data:', err);
+      debugError('Failed to load Chrome data:', err);
       setError(err instanceof Error ? err.message : 'Unknown error');
       setIsLoading(false);
     }
@@ -324,7 +325,7 @@ function App() {
     const operations = calculateDiff(originalState, stagedState);
     const changeDesc = describeChanges(operations);
 
-    console.log('Applying changes:', changeDesc, operations);
+    debug('Applying changes:', changeDesc, operations);
 
     // Calculate total operations for progress tracking
     const totalOps = operations.newGroups.length +
@@ -356,10 +357,10 @@ function App() {
 
           groupIdMap[op.tempId] = result.data.id;
 
-          console.log(`✓ Created group "${op.title}" with ${op.tabIds.length} tabs`);
+          debug(`✓ Created group "${op.title}" with ${op.tabIds.length} tabs`);
           NotificationManager.success(`Created group "${op.title}"`);
         } catch (err) {
-          console.error(`Failed to create group "${op.title}":`, err);
+          debugError(`Failed to create group "${op.title}":`, err);
           const errorMsg = `Failed to create group "${op.title}": ${err instanceof Error ? err.message : 'Unknown error'}`;
           errors.push(errorMsg);
           NotificationManager.error(errorMsg);
@@ -378,9 +379,9 @@ function App() {
             throw new Error(result.error.message);
           }
 
-          console.log(`✓ Renamed "${op.oldTitle}" → "${op.newTitle}"`);
+          debug(`✓ Renamed "${op.oldTitle}" → "${op.newTitle}"`);
         } catch (err) {
-          console.error(`Failed to rename group:`, err);
+          debugError(`Failed to rename group:`, err);
           const errorMsg = `Failed to rename group: ${err instanceof Error ? err.message : 'Unknown error'}`;
           errors.push(errorMsg);
           NotificationManager.error(errorMsg);
@@ -405,16 +406,16 @@ function App() {
             if (!result.success) {
               throw new Error(result.error.message);
             }
-            console.log(`✓ Ungrouped tab: ${op.title}`);
+            debug(`✓ Ungrouped tab: ${op.title}`);
           } else if (targetGroupId > 0) {
             const result = await ChromeAPI.addTabsToGroup([op.tabId], targetGroupId);
             if (!result.success) {
               throw new Error(result.error.message);
             }
-            console.log(`✓ Moved tab "${op.title}" to group`);
+            debug(`✓ Moved tab "${op.title}" to group`);
           }
         } catch (err) {
-          console.error(`Failed to move tab:`, err);
+          debugError(`Failed to move tab:`, err);
           const errorMsg = `Failed to move tab: ${err instanceof Error ? err.message : 'Unknown error'}`;
           errors.push(errorMsg);
           NotificationManager.error(errorMsg);
@@ -429,7 +430,7 @@ function App() {
 
           await chrome.tabs.move(op.tabId, { index: op.newIndex });
         } catch (err) {
-          console.error(`Failed to reorder tab:`, err);
+          debugError(`Failed to reorder tab:`, err);
           // Don't add to errors - reordering is non-critical
         }
       }
@@ -444,16 +445,16 @@ function App() {
           if (!result.success) {
             throw new Error(result.error.message);
           }
-          console.log(`✓ Deleted group`);
+          debug(`✓ Deleted group`);
         } catch (err) {
-          console.error(`Failed to delete group:`, err);
+          debugError(`Failed to delete group:`, err);
           const errorMsg = `Failed to delete group: ${err instanceof Error ? err.message : 'Unknown error'}`;
           errors.push(errorMsg);
           NotificationManager.error(errorMsg);
         }
       }
 
-      console.log(`✓ Applied ${changeDesc}`);
+      debug(`✓ Applied ${changeDesc}`);
 
       // Show success toast
       if (errors.length === 0) {
@@ -467,7 +468,7 @@ function App() {
       await loadChromeData();
       undoRedo.clearHistory(); // Clear undo/redo history after successful apply
     } catch (error) {
-      console.error('Failed to apply changes:', error);
+      debugError('Failed to apply changes:', error);
       NotificationManager.error(`Failed to apply changes: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsApplying(false);
@@ -484,13 +485,13 @@ function App() {
   const applySuggestionsToStaged = (newSuggestions: AISuggestion[]) => {
     if (!newSuggestions || newSuggestions.length === 0) return;
 
-    console.log('🎯 applySuggestionsToStaged called with:', newSuggestions);
-    console.log('Current staged tabs (first 5):', stagedState.tabs.slice(0, 5).map(t => ({ id: t.id, title: t.title })));
+    debug('🎯 applySuggestionsToStaged called with:', newSuggestions);
+    debug('Current staged tabs (first 5):', stagedState.tabs.slice(0, 5).map(t => ({ id: t.id, title: t.title })));
 
     updateStaged(draft => {
       // Create a new group for each suggestion
       newSuggestions.forEach(suggestion => {
-        console.log(`Processing suggestion "${suggestion.groupName}":`, {
+        debug(`Processing suggestion "${suggestion.groupName}":`, {
           tabIds: suggestion.tabIds,
           tabIdsCount: suggestion.tabIds?.length || 0,
           availableTabs: draft.tabs.length
@@ -516,16 +517,16 @@ function App() {
           suggestion.tabIds.forEach(tabId => {
             const tab = draft.tabs.find(t => t.id === tabId);
             if (!tab) {
-              console.warn(`❌ Tab ${tabId} not found in draft.tabs`);
+              debugWarn(`❌ Tab ${tabId} not found in draft.tabs`);
             } else {
-              console.log(`✓ Found tab ${tabId}: ${tab.title}`);
+              debug(`✓ Found tab ${tabId}: ${tab.title}`);
               tab.groupId = newGroupId;  // Normal groupId - tabs behave identically!
               movedCount++;
             }
           });
         }
 
-        console.log(`✅ Moved ${movedCount}/${suggestion.tabIds?.length || 0} tabs into group "${suggestion.groupName}"`);
+        debug(`✅ Moved ${movedCount}/${suggestion.tabIds?.length || 0} tabs into group "${suggestion.groupName}"`);
       });
     });
 
@@ -670,31 +671,31 @@ function App() {
         }
       } else if ((result.data as any).started) {
         // Background analysis started - poll for results
-        console.log('🔄 Analysis started, polling for results...');
+        debug('🔄 Analysis started, polling for results...');
         NotificationManager.info('Analysis started in background...');
         setLastAnalysisClick(Date.now());
         pollForAnalysisResults();
       } else if (result.data.suggestions) {
         // Immediate results
-        console.log('✅ Immediate results, suggestions:', result.data.suggestions);
+        debug('✅ Immediate results, suggestions:', result.data.suggestions);
         setLastAnalysisClick(Date.now());
         setSuggestionsAndConvert(result.data.suggestions);
         NotificationManager.success(`Found ${result.data.suggestions.length} grouping suggestions`);
         await finishAnalyzing();
       }
     } catch (error) {
-      console.error('Error analyzing tabs:', error);
+      debugError('Error analyzing tabs:', error);
       NotificationManager.error(`Analysis error: ${error instanceof Error ? error.message : 'Unknown error'}`);
       await finishAnalyzing();
     }
   };
 
   const pollForAnalysisResults = () => {
-    console.log('🔄 Starting to poll for analysis results...');
+    debug('🔄 Starting to poll for analysis results...');
     const pollInterval = setInterval(async () => {
       try {
         const progressResult = await AIOperations.getAnalysisProgress();
-        console.log('📊 Poll check - progress:', progressResult.data);
+        debug('📊 Poll check - progress:', progressResult.data);
 
         if (!progressResult.success) {
           clearInterval(pollInterval);
@@ -714,16 +715,16 @@ function App() {
             action: 'getLastAnalysisResults'
           });
 
-          console.log('📋 Poll complete, resultsResponse:', resultsResponse);
-          console.log('📋 Response check - success:', resultsResponse.success, 'results:', resultsResponse.results, 'suggestions:', resultsResponse.results?.suggestions);
+          debug('📋 Poll complete, resultsResponse:', resultsResponse);
+          debug('📋 Response check - success:', resultsResponse.success, 'results:', resultsResponse.results, 'suggestions:', resultsResponse.results?.suggestions);
 
           if (resultsResponse.success && resultsResponse.results && resultsResponse.results.suggestions) {
-            console.log(`✅ Setting ${resultsResponse.results.suggestions.length} suggestions:`, resultsResponse.results.suggestions);
+            debug(`✅ Setting ${resultsResponse.results.suggestions.length} suggestions:`, resultsResponse.results.suggestions);
             setSuggestionsAndConvert(resultsResponse.results.suggestions);
             NotificationManager.success(`Analysis complete! Found ${resultsResponse.results.suggestions.length} grouping suggestions`);
           } else {
-            console.warn('⚠️ No suggestions in resultsResponse:', resultsResponse);
-            console.warn('⚠️ Checks failed - success:', resultsResponse.success, 'has results:', !!resultsResponse.results, 'has suggestions:', !!resultsResponse.results?.suggestions);
+            debugWarn('⚠️ No suggestions in resultsResponse:', resultsResponse);
+            debugWarn('⚠️ Checks failed - success:', resultsResponse.success, 'has results:', !!resultsResponse.results, 'has suggestions:', !!resultsResponse.results?.suggestions);
             NotificationManager.info('Analysis complete - no suggestions generated');
           }
 
@@ -732,7 +733,7 @@ function App() {
         }
       } catch (error) {
         clearInterval(pollInterval);
-        console.error('Error polling for results:', error);
+        debugError('Error polling for results:', error);
         setIsAnalyzing(false);
         setAnalysisProgress({ current: 0, total: 0, status: 'idle' });
       }
@@ -841,7 +842,7 @@ function App() {
         NotificationManager.warning('No suitable group found');
       }
     } catch (error) {
-      console.error('Error finding group:', error);
+      debugError('Error finding group:', error);
       NotificationManager.error('Failed to find group');
     }
   }, [selectedTabs, stagedState.tabs, stagedState.groups, suggestions, updateStaged]);

@@ -1,6 +1,7 @@
 import React from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { getFaviconUrl, getDomain, truncate } from '../utils/tab-helpers';
 
 // SortableTabCard - Wrapper for TabCard that makes it sortable within groups
 function SortableTabCard({ tab, isSelected, isDuplicate, onSelect, onFindGroup, isDropTarget, dropPosition }) {
@@ -30,28 +31,6 @@ function SortableTabCard({ tab, isSelected, isDuplicate, onSelect, onFindGroup, 
       borderRight: '3px solid var(--primary-color)',
       paddingRight: 'calc(0.6rem - 2px)'
     })
-  };
-
-  const getFaviconUrl = (tab) => {
-    // Use tab's favIconUrl if available, otherwise fallback to extension icon
-    if (tab.favIconUrl && tab.favIconUrl.startsWith('http')) {
-      return tab.favIconUrl;
-    }
-    return chrome.runtime.getURL('icons/icon16.png');
-  };
-
-  const getDomain = (url) => {
-    try {
-      const urlObj = new URL(url);
-      return urlObj.hostname;
-    } catch {
-      return url;
-    }
-  };
-
-  const truncate = (str, maxLength) => {
-    if (!str) return '';
-    return str.length > maxLength ? str.substring(0, maxLength) + '...' : str;
   };
 
   return (
