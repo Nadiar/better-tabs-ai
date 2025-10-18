@@ -178,17 +178,22 @@ const DEFAULT_AI_PROMPT_RULES = `CRITICAL RULES:
    - Same domain doesn't mean same group (Reddit has millions of topics)
    - Different domains CAN be same group (shopping across multiple stores)
 
-5. **PER-TAB CONFIDENCE** (0.0-1.0):
+5. **QUALITY THRESHOLD** - ONLY suggest a group if:
+   - At least 2 tabs have confidence >= 0.9 (very strong matches)
+   - ALL tabs meet the minimum confidence threshold
+   - Better to suggest FEWER high-quality groups than many weak ones
+
+6. **PER-TAB CONFIDENCE** (0.0-1.0):
    - 0.9-1.0: Perfectly fits the group topic
    - 0.7-0.8: Strongly related
    - 0.5-0.6: Somewhat related
    - <0.5: Probably doesn't belong
 
 Examples:
-✅ GOOD: "Woodworking Projects" = [Woodworking Reddit, DIY table saw tips, Router jig plans]
-❌ BAD: "Home & DIY" = [Messages for Web, House listings, Woodworking]
-✅ GOOD: "Messages" = [All Messages tabs regardless of conversations]
-❌ BAD: "House Hunting Messages" = [Messages + Zillow]`;
+✅ GOOD: "Woodworking Projects" = [Woodworking Reddit (0.95), DIY table saw tips (0.92), Router jig plans (0.88)]
+❌ BAD: "Home & DIY" = [Messages for Web (0.3), House listings (0.7), Woodworking (0.9)]
+✅ GOOD: "Messages" = [All Messages tabs with 0.95+ confidence]
+❌ BAD: Weak group with no high-confidence core tabs`;
 
 const DEFAULT_SETTINGS = {
   // AI Analysis Settings
