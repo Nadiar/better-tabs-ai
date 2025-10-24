@@ -1499,13 +1499,16 @@ Rules:
       // Token estimation (rough: 1 token ≈ 4 characters)
       const estimateTokens = (text) => Math.ceil(text.length / 4);
 
-      const MAX_TOKENS = 1000; // Gemini Nano limit
       const promptRules = this.settings.customAIPromptRules || DEFAULT_AI_PROMPT_RULES;
-      const PROMPT_OVERHEAD = estimateTokens(promptRules) + 150; // Rules + format instructions
-      const TOKENS_PER_TAB = 15; // ~"1. github,tabs @github.com"
+      const PROMPT_OVERHEAD = estimateTokens(promptRules) + CONSTANTS.TOKENS.PROMPT_OVERHEAD_BASE;
 
-      const maxTabsPerBatch = Math.floor((MAX_TOKENS - PROMPT_OVERHEAD) / TOKENS_PER_TAB);
-      console.log(`📊 Token budget: ${MAX_TOKENS} tokens, ${maxTabsPerBatch} tabs per batch`);
+      // Reserve tokens for both input AND output (Gemini Nano has 1000 token limit total)
+      const TOTAL_TOKENS_PER_TAB = CONSTANTS.TOKENS.PER_TAB_INPUT + CONSTANTS.TOKENS.PER_TAB_OUTPUT;
+
+      const maxTabsPerBatch = Math.floor(
+        (CONSTANTS.AI.MAX_TOKENS - PROMPT_OVERHEAD - CONSTANTS.TOKENS.OUTPUT_OVERHEAD) / TOTAL_TOKENS_PER_TAB
+      );
+      console.log(`📊 Token budget: ${CONSTANTS.AI.MAX_TOKENS} tokens total, ${maxTabsPerBatch} tabs per batch (accounting for output)`);
 
       // Check if we need batching
       if (tabData.length <= maxTabsPerBatch) {

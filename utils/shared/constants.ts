@@ -19,10 +19,24 @@ export const CACHE = {
  * AI Model Configuration
  */
 export const AI = {
-  /** Maximum tokens per Gemini Nano prompt */
+  /** Maximum tokens per Gemini Nano prompt (both input AND output combined) */
   MAX_TOKENS: 1000,
   /** Temperature for AI responses (0.0-1.0, higher = more creative) */
   TEMPERATURE: 0.7,
+} as const;
+
+/**
+ * Token Estimation for Batching
+ */
+export const TOKENS = {
+  /** Estimated tokens per tab in input prompt */
+  PER_TAB_INPUT: 15,
+  /** Estimated tokens per tab in JSON output */
+  PER_TAB_OUTPUT: 40,
+  /** Overhead for prompt rules and instructions */
+  PROMPT_OVERHEAD_BASE: 150,
+  /** Overhead for JSON array structure in output */
+  OUTPUT_OVERHEAD: 50,
 } as const;
 
 /**
