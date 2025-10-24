@@ -55,6 +55,7 @@ export interface AISuggestion {
   confidence: number;
   color?: ChromeColor;
   reasoning?: string;
+  tabConfidences?: Record<number, number>; // Per-tab confidence scores (tabId -> confidence)
 }
 
 /**
