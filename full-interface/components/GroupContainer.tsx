@@ -3,10 +3,25 @@ import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { useStagedStateContext } from '../app';
 import SortableTabCard from './SortableTabCard';
+import { GroupData, TabData, ChromeColor } from '@shared/types';
 
+interface GroupContainerProps {
+  group: GroupData;
+  tabs: TabData[];
+  duplicateTabs?: number[];
+  activeDropTarget: string | null;
+  dropPosition: 'before' | 'after' | null;
+  onDismiss?: (() => void) | null;
+  onTabContextMenu?: (e: React.MouseEvent, tab: TabData) => void;
+}
+
+interface ChromeMessageResponse {
+  error?: string;
+  groupName?: string;
+}
 
 // Group Container - Droppable container for tab groups with sortable tabs
-function GroupContainer({ group, tabs, duplicateTabs = [], activeDropTarget, dropPosition, onDismiss = null }) {
+function GroupContainer({ group, tabs, duplicateTabs = [], activeDropTarget, dropPosition, onDismiss = null, onTabContextMenu }: GroupContainerProps): React.ReactElement {
   const groupTabs = tabs.filter(tab => tab.groupId === group.id);
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState(group.title || '');
@@ -28,11 +43,11 @@ function GroupContainer({ group, tabs, duplicateTabs = [], activeDropTarget, dro
     }
   };
 
-  const handleTitleChange = (e) => {
+  const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
     setEditValue(e.target.value);
   };
 
-  const handleTitleBlur = () => {
+  const handleTitleBlur = (): void => {
     setIsEditing(false);
     if (editValue.trim() !== group.title) {
       updateStaged((draft) => {
@@ -44,7 +59,7 @@ function GroupContainer({ group, tabs, duplicateTabs = [], activeDropTarget, dro
     }
   };
 
-  const handleTitleKeyDown = (e) => {
+  const handleTitleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>): void => {
     if (e.key === 'Enter') {
       e.preventDefault();
       handleTitleBlur();
@@ -54,7 +69,7 @@ function GroupContainer({ group, tabs, duplicateTabs = [], activeDropTarget, dro
     }
   };
 
-  const handleGenerateName = async () => {
+  const handleGenerateName = async (): Promise<void> => {
     if (isGeneratingName || groupTabs.length === 0) return;
 
     setIsGeneratingName(true);
@@ -66,7 +81,7 @@ function GroupContainer({ group, tabs, duplicateTabs = [], activeDropTarget, dro
           title: t.title,
           url: t.url
         }))
-      });
+      }) as ChromeMessageResponse;
 
       if (response.error) {
         console.error('Failed to generate name:', response.error);
@@ -85,7 +100,7 @@ function GroupContainer({ group, tabs, duplicateTabs = [], activeDropTarget, dro
     }
   };
 
-  const handleColorChange = (newColor) => {
+  const handleColorChange = (newColor: ChromeColor): void => {
     updateStaged((draft) => {
       const groupToUpdate = draft.groups.find(g => g.id === group.id);
       if (groupToUpdate) {
@@ -95,7 +110,7 @@ function GroupContainer({ group, tabs, duplicateTabs = [], activeDropTarget, dro
     setShowColorPicker(false);
   };
 
-  const handleDeleteGroup = () => {
+  const handleDeleteGroup = (): void => {
     if (confirm(`Delete group "${group.title}"? Tabs will be ungrouped.`)) {
       updateStaged((draft) => {
         // Remove group
@@ -112,8 +127,8 @@ function GroupContainer({ group, tabs, duplicateTabs = [], activeDropTarget, dro
   };
 
   // Chrome tab group colors
-  const getGroupColor = (color) => {
-    const colors = {
+  const getGroupColor = (color: ChromeColor): string => {
+    const colors: Record<ChromeColor, string> = {
       grey: '#5f6368',
       blue: '#1a73e8',
       red: '#d93025',
@@ -123,10 +138,10 @@ function GroupContainer({ group, tabs, duplicateTabs = [], activeDropTarget, dro
       purple: '#9334e6',
       cyan: '#007b83'
     };
-    return colors[color] || colors.grey;
+    return colors[color as ChromeColor] || colors.grey;
   };
 
-  const chromeColors = ['grey', 'blue', 'red', 'yellow', 'green', 'pink', 'purple', 'cyan'];
+  const chromeColors: ChromeColor[] = ['grey', 'blue', 'red', 'yellow', 'green', 'pink', 'purple', 'cyan'];
 
   return (
     <div
@@ -247,6 +262,7 @@ function GroupContainer({ group, tabs, duplicateTabs = [], activeDropTarget, dro
                   isDuplicate={duplicateTabs.includes(tab.id)}
                   isDropTarget={isDropTarget}
                   dropPosition={isDropTarget ? dropPosition : null}
+                  onContextMenu={onTabContextMenu}
                 />
               );
             })

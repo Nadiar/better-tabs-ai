@@ -146,6 +146,91 @@
                 </div>
             </section>
 
+            <!-- Advanced Grouping Parameters -->
+            <section class="settings-section">
+                <h2>⚙️ Advanced Grouping</h2>
+                <p class="section-description">Fine-tune the grouping algorithm behavior</p>
+
+                <div class="setting-item">
+                    <label for="minMatchScore">
+                        <strong>Minimum Match Score</strong>
+                        <span class="setting-description">How similar tabs must be to suggest grouping them together</span>
+                    </label>
+                    <div class="slider-container">
+                        <input type="range" id="minMatchScore"
+                               min="0.5" max="0.9" step="0.05" value="0.7">
+                        <div class="slider-labels">
+                            <span class="value-display" id="matchScoreValue">0.7</span>
+                            <span class="slider-hint" id="matchScoreHint">Balanced</span>
+                        </div>
+                    </div>
+                    <div class="range-labels">
+                        <span>0.5 - More grouping suggestions</span>
+                        <span>0.9 - Only very similar tabs</span>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <label for="minTabsPerGroup">
+                        <strong>Minimum Tabs Per Group</strong>
+                        <span class="setting-description">Minimum number of tabs required to suggest a group</span>
+                    </label>
+                    <div class="number-input">
+                        <input type="number" id="minTabsPerGroup" min="2" max="5" value="2">
+                        <span class="unit">tabs</span>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <label for="skipLowConfidenceTabs">
+                        <strong>Skip Uncertain Tabs Below</strong>
+                        <span class="setting-description">Skip tabs where all topics have confidence below this threshold</span>
+                    </label>
+                    <div class="slider-container">
+                        <input type="range" id="skipLowConfidenceTabs"
+                               min="0.2" max="0.5" step="0.05" value="0.3">
+                        <div class="slider-labels">
+                            <span class="value-display" id="skipLowConfValue">0.3</span>
+                            <span class="slider-hint" id="skipLowConfHint">Default</span>
+                        </div>
+                    </div>
+                    <div class="range-labels">
+                        <span>0.2 - Include more uncertain tabs</span>
+                        <span>0.5 - Skip more uncertain tabs</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Exclusion List -->
+            <section class="settings-section">
+                <h2>🚫 Exclusion List</h2>
+                <p class="section-description">Exclude specific sites from AI grouping suggestions</p>
+
+                <div class="setting-item">
+                    <div id="exclusionList" class="exclusion-list">
+                        <!-- Dynamically populated -->
+                    </div>
+
+                    <div class="exclusion-add-form">
+                        <input type="text" id="newExclusionPattern"
+                               placeholder="e.g., *.example.com or example.com/path/*"
+                               style="flex: 1; font-family: monospace;">
+                        <select id="newExclusionType">
+                            <option value="domain">Domain</option>
+                            <option value="subdomain">Subdomain</option>
+                            <option value="uri">URI Path</option>
+                        </select>
+                        <button id="addExclusionBtn" class="secondary-btn">➕ Add</button>
+                    </div>
+
+                    <div class="exclusion-help">
+                        <strong>Pattern Examples:</strong><br>
+                        • <code>example.com</code> - Exact domain match<br>
+                        • <code>*.example.com</code> - All subdomains<br>
+                        • <code>example.com/docs/*</code> - Specific path and subpaths
+                    </div>
+                </div>
+            </section>
 
             <!-- Status Display -->
             <section class="settings-section status-section">

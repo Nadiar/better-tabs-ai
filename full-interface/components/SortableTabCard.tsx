@@ -10,12 +10,14 @@ interface SortableTabCardProps {
   isDuplicate?: boolean;
   onSelect?: (tabId: number, e: React.MouseEvent) => void;
   onFindGroup?: (tabId: number, e: React.MouseEvent) => void;
+  onContextMenu?: (e: React.MouseEvent, tab: TabData) => void;
   isDropTarget?: boolean;
   dropPosition?: 'before' | 'after' | null;
+  tabConfidence?: number; // AI confidence score for this specific tab
 }
 
 // SortableTabCard - Wrapper for TabCard that makes it sortable within groups
-function SortableTabCard({ tab, isSelected, isDuplicate, onSelect, onFindGroup, isDropTarget, dropPosition }: SortableTabCardProps): JSX.Element {
+function SortableTabCard({ tab, isSelected, isDuplicate, onSelect, onFindGroup, onContextMenu, isDropTarget, dropPosition, tabConfidence }: SortableTabCardProps): JSX.Element {
   const {
     attributes,
     listeners,
@@ -53,6 +55,7 @@ function SortableTabCard({ tab, isSelected, isDuplicate, onSelect, onFindGroup, 
       data-sortable-id={`tab-${tab.id}`}
       className={`tab-card ${isSelected ? 'selected' : ''} ${isDuplicate ? 'duplicate' : ''} ${isDragging ? 'dragging' : ''}`}
       onClick={(e) => onSelect && onSelect(tab.id, e)}
+      onContextMenu={(e) => onContextMenu && onContextMenu(e, tab)}
       title={`${tab.title}\n${tab.url}`}
     >
       <img
@@ -70,6 +73,16 @@ function SortableTabCard({ tab, isSelected, isDuplicate, onSelect, onFindGroup, 
       {isDuplicate && (
         <span className="duplicate-badge">Duplicate</span>
       )}
+      {tabConfidence !== undefined && (
+        <span
+          className="tab-confidence-badge"
+          title={`AI confidence: ${Math.round(tabConfidence * 100)}%`}
+        >
+          {Math.round(tabConfidence * 100)}%
+        </span>
+      )}
+      {/* Debug: Always show if prop exists */}
+      {tabConfidence !== undefined && console.log(`[TabCard] Rendering badge for tab ${tab.id}: ${tabConfidence}`)}
       {onFindGroup && (
         <button
           className="btn-icon find-group-btn"

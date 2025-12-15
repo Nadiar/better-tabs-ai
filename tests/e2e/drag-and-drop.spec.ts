@@ -285,17 +285,15 @@ test.describe('Drag and Drop - Group to Group', () => {
 
 test.describe('Drag and Drop - Reordering', () => {
   test.beforeEach(async ({ page }) => {
-    await injectChromeMock(page, sampleDragDropData.tabs, sampleDragDropData.groups);
+    await injectChromeMock(page, sampleMultiGroupData.tabs, sampleMultiGroupData.groups);
     await page.goto('http://127.0.0.1:8081/full-interface/dist/index.html');
     await expect(page.locator('.app-container')).toBeVisible({ timeout: 5000 });
   });
 
   test.skip('should reorder tabs within the same group', async ({ page }) => {
-    // SKIP: This test requires precise positioning control to verify Issue #22 behavior.
-    // The performDrag helper drops at center (50%), but onDragOver position detection
-    // may not consistently trigger in E2E environment due to timing/event handling differences.
-    // The feature works correctly in manual testing. Use drop-positioning.spec.ts for
-    // more targeted testing with performPositionedDrag helper.
+    // SKIP: Precise drag positioning doesn't work reliably in E2E headless mode
+    // The feature works correctly in manual testing
+    // Drag-and-drop functionality is covered by other passing tests
     await expect(page.locator('.app-container')).toBeVisible();
 
     // Find a group with multiple tabs

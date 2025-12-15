@@ -11,10 +11,11 @@ interface TabCardProps {
   isDuplicate?: boolean;
   onSelect?: (tabId: number, e: React.MouseEvent) => void;
   onFindGroup?: (tabId: number, e: React.MouseEvent) => void;
+  onContextMenu?: (e: React.MouseEvent, tab: TabData) => void;
 }
 
 // Tab Card Component - Draggable tab with favicon and title
-function TabCard({ tab, isSelected, isDuplicate, onSelect, onFindGroup }: TabCardProps): JSX.Element {
+function TabCard({ tab, isSelected, isDuplicate, onSelect, onFindGroup, onContextMenu }: TabCardProps): JSX.Element {
   const [faviconLoaded, setFaviconLoaded] = useState<boolean>(false);
   const [faviconError, setFaviconError] = useState<boolean>(false);
 
@@ -38,6 +39,7 @@ function TabCard({ tab, isSelected, isDuplicate, onSelect, onFindGroup }: TabCar
         {...attributes}
         className={`tab-card ${isSelected ? 'selected' : ''} ${isDuplicate ? 'duplicate' : ''} ${isDragging ? 'dragging' : ''}`}
         onClick={(e) => onSelect && onSelect(tab.id, e)}
+        onContextMenu={(e) => onContextMenu && onContextMenu(e, tab)}
       >
         <img
           src={getFaviconUrl(tab)}

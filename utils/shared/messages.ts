@@ -279,10 +279,20 @@ export interface AnalysisCompleteMessage extends BaseMessage {
   results: AnalyzeAllTabsResponse;
 }
 
+export interface AnalysisProgressMessage extends BaseMessage {
+  action: 'analysisProgress';
+  step: 'tab-analysis' | 'topic-extraction' | 'ai-batch' | 'topic-comparison' | 'finalizing';
+  message: string; // Human-readable progress message
+  progress?: {
+    current: number;
+    total: number;
+  };
+}
+
 /**
  * Union type of all possible broadcast messages
  */
-export type BroadcastMessage = AnalysisCompleteMessage;
+export type BroadcastMessage = AnalysisCompleteMessage | AnalysisProgressMessage;
 
 /**
  * ============================================================================

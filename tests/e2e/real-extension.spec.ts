@@ -126,14 +126,18 @@ test.describe('Real Extension Tests', () => {
   });
 
   test.skip('should check AI availability in popup', async () => {
-    // TODO: Popup takes longer to load in test environment
-    // This test works but needs better wait conditions
+    // SKIP: Popup loading timing is inconsistent in E2E test environment
+    // Works correctly in manual testing
     const page = await context.newPage();
 
     try {
       await page.goto(`chrome-extension://${extensionId}/popup-react/dist/index.html`);
-      // Wait for AI status check to complete
-      await expect(page.locator('#aiStatus, header')).toBeVisible({ timeout: 10000 });
+      // Wait for React app to mount and render
+      await page.waitForLoadState('domcontentloaded');
+      await page.waitForTimeout(1000); // Give React time to mount
+
+      // Wait for AI status check to complete (or header to appear if no AI status)
+      await expect(page.locator('header').first()).toBeVisible({ timeout: 15000 });
 
       // Look for AI status indicator
       const statusIndicator = page.locator('#aiStatus').first();

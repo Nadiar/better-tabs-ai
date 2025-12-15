@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { DndContext, DragOverlay, PointerSensor, useSensor, useSensors, closestCenter, pointerWithin } from '@dnd-kit/core';
+import { DndContext, DragOverlay, PointerSensor, useSensor, useSensors, closestCenter, pointerWithin, DragStartEvent, DragOverEvent, DragEndEvent, CollisionDetection } from '@dnd-kit/core';
 import { useStagedStateContext } from '../app';
 import Header from './Header';
 import ConflictBanner from './ConflictBanner';
@@ -10,14 +10,16 @@ import TabCard from './TabCard';
 import ToastContainer from './Toast';
 import ProgressBar from './ProgressBar';
 import { debug, debugError } from '../utils/debug';
+import { TabData, ChromeColor } from '@shared/types';
 
+type DropPosition = 'before' | 'after' | null;
 
 // Layout Component - Main 3-column layout with drag & drop
-function Layout() {
-  const { stagedState, hasChanges, showConflictBanner, isApplying, isAnalyzing, analysisProgress, applyProgress, toasts, suggestions, searchTerm, duplicateTabs, showAdvancedOptions, selectedTabs, undoRedo, resetToOriginal, applyChanges, analyzeTabs, clearCache, copyDebugInfo, refreshFromChrome, updateStaged, dismissConflictBanner, handleSearchChange, handleSelectTab, handleFindGroup } = useStagedStateContext();
-  const [activeTab, setActiveTab] = useState(null);
-  const [activeDropTarget, setActiveDropTarget] = useState(null);
-  const [dropPosition, setDropPosition] = useState(null); // 'before' | 'after' | null
+function Layout(): React.ReactElement {
+  const { stagedState, hasChanges, showConflictBanner, isApplying, isAnalyzing, analysisProgress, applyProgress, toasts, suggestions, searchTerm, duplicateTabs, showAdvancedOptions, selectedTabs, undoRedo, resetToOriginal, applyChanges, analyzeTabs, clearCache, copyDebugInfo, refreshFromChrome, updateStaged, dismissConflictBanner, handleSearchChange, handleSelectTab, handleFindGroup, handleTabContextMenu } = useStagedStateContext();
+  const [activeTab, setActiveTab] = useState<TabData | null>(null);
+  const [activeDropTarget, setActiveDropTarget] = useState<string | null>(null);
+  const [dropPosition, setDropPosition] = useState<DropPosition>(null);
 
   // Filter tabs based on search term
   const filteredTabs = useMemo(() => {
@@ -43,13 +45,13 @@ function Layout() {
   );
 
   // Optimize collision detection for large tab counts
-  const collisionDetectionStrategy = useMemo(() => {
+  const collisionDetectionStrategy: CollisionDetection = useMemo(() => {
     // For 50+ tabs, use pointerWithin for better performance
     // For < 50 tabs, use closestCenter for better UX (more forgiving)
     return stagedState.tabs.length >= 50 ? pointerWithin : closestCenter;
   }, [stagedState.tabs.length]);
 
-  const handleApply = async () => {
+  const handleApply = async (): Promise<void> => {
     // Check if there are ephemeral groups in staged state
     const ephemeralGroups = stagedState.groups.filter(g => g.isSuggested);
 
@@ -79,7 +81,7 @@ function Layout() {
     await applyChanges();
   };
 
-  const handleCancel = () => {
+  const handleCancel = (): void => {
     // Check if there are ephemeral groups
     const ephemeralGroups = stagedState.groups.filter(g => g.isSuggested);
 
@@ -116,28 +118,28 @@ function Layout() {
     }
   };
 
-  const handleRefresh = async () => {
+  const handleRefresh = async (): Promise<void> => {
     if (!hasChanges || confirm('Refreshing will discard unsaved changes. Continue?')) {
       await refreshFromChrome();
       dismissConflictBanner(); // Dismiss the banner after refreshing
     }
   };
 
-  const handleAnalyze = async () => {
+  const handleAnalyze = async (): Promise<void> => {
     await analyzeTabs();
   };
 
-  const handleDragStart = (event) => {
-    const draggedTabId = parseInt(event.active.id.replace('tab-', ''), 10);
+  const handleDragStart = (event: DragStartEvent): void => {
+    const draggedTabId = parseInt(String(event.active.id).replace('tab-', ''), 10);
     if (isNaN(draggedTabId)) {
       debugError('Invalid tab ID format in drag start:', event.active.id);
       return;
     }
     const tab = stagedState.tabs.find(t => t.id === draggedTabId);
-    setActiveTab(tab);
+    setActiveTab(tab || null);
   };
 
-  const handleDragOver = (event) => {
+  const handleDragOver = (event: DragOverEvent): void => {
     const { over, activatorEvent } = event;
 
     if (!over || !over.id) {
@@ -146,7 +148,7 @@ function Layout() {
       return;
     }
 
-    const overId = over.id.toString();
+    const overId = String(over.id);
 
     // Only calculate position for tab-to-tab drops
     if (overId.startsWith('tab-')) {
@@ -182,7 +184,7 @@ function Layout() {
     }
   };
 
-  const handleDragEnd = (event) => {
+  const handleDragEnd = (event: DragEndEvent): void => {
     try {
       const { active, over } = event;
 
@@ -193,15 +195,15 @@ function Layout() {
 
       if (!over) return;
 
-      const draggedTabId = parseInt(active.id.replace('tab-', ''), 10);
+      const draggedTabId = parseInt(String(active.id).replace('tab-', ''), 10);
       if (isNaN(draggedTabId)) {
         debugError('Invalid tab ID format in drag end:', active.id);
         return;
       }
 
-      const dropTarget = over.id;
+      const dropTarget = String(over.id);
 
-      debug('Drag end:', { draggedTabId, dropTarget, activeId: active.id, overId: over.id });
+      debug('Drag end:', { draggedTabId, dropTarget, activeId: String(active.id), overId: String(over.id) });
 
 
       // Reordering within same group (sortable) or moving to different group with position
@@ -286,10 +288,10 @@ function Layout() {
         const newGroupId = Math.min(...draft.groups.map(g => g.id), -1) - 1;
 
         // Pick a random unused color
-        const chromeColors = ['grey', 'blue', 'red', 'yellow', 'green', 'pink', 'purple', 'cyan'];
+        const chromeColors: ChromeColor[] = ['grey', 'blue', 'red', 'yellow', 'green', 'pink', 'purple', 'cyan'];
         const usedColors = draft.groups.map(g => g.color);
         const availableColors = chromeColors.filter(c => !usedColors.includes(c));
-        const randomColor = availableColors.length > 0
+        const randomColor: ChromeColor = availableColors.length > 0
           ? availableColors[Math.floor(Math.random() * availableColors.length)]
           : chromeColors[Math.floor(Math.random() * chromeColors.length)];
 
@@ -335,7 +337,7 @@ function Layout() {
     }
   };
 
-  const handleDragCancel = () => {
+  const handleDragCancel = (): void => {
     setActiveTab(null);
     setActiveDropTarget(null);
     setDropPosition(null);
@@ -388,6 +390,7 @@ function Layout() {
               onFindGroup={handleFindGroup}
               selectedTabs={selectedTabs}
               onSelectTab={handleSelectTab}
+              onTabContextMenu={handleTabContextMenu}
             />
             <GroupsColumn
               groups={stagedState.groups}
@@ -396,6 +399,7 @@ function Layout() {
               duplicateTabs={duplicateTabs}
               activeDropTarget={activeDropTarget}
               dropPosition={dropPosition}
+              onTabContextMenu={handleTabContextMenu}
             />
             <NewGroupBox />
           </div>

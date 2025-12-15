@@ -6,23 +6,23 @@ import { TabData } from '@shared';
 
 /**
  * Get the favicon URL for a tab, with fallback to extension icon
- * Uses Chrome's favicon service to avoid CORS issues
+ * Uses Google's favicon service to avoid certificate validation errors
  */
 export const getFaviconUrl = (tab: TabData): string => {
-  // For chrome:// URLs and data URLs, use extension icon
-  if (!tab.url || tab.url.startsWith('chrome://') || tab.url.startsWith('data:') || tab.url.startsWith('about:')) {
-    return chrome.runtime.getURL('icons/icon16.png');
+  // Use Google's public favicon service which handles cert errors gracefully
+  // This avoids ERR_CERT_AUTHORITY_INVALID errors in console
+  if (tab.url && tab.url.startsWith('http')) {
+    try {
+      const url = new URL(tab.url);
+      // Use Google's favicon service which proxies favicons and avoids cert errors
+      return `https://www.google.com/s2/favicons?domain=${url.hostname}&sz=16`;
+    } catch {
+      // If URL parsing fails, use fallback
+    }
   }
 
-  // Use Chrome's built-in favicon service to avoid CORS issues
-  // This service fetches favicons from the browser's cache
-  try {
-    const pageUrl = new URL(tab.url);
-    return `chrome-extension://${chrome.runtime.id}/_favicon/?pageUrl=${encodeURIComponent(tab.url)}&size=16`;
-  } catch {
-    // If URL is invalid, use extension icon
-    return chrome.runtime.getURL('icons/icon16.png');
-  }
+  // For chrome:// URLs, extension pages, and missing favicons
+  return chrome.runtime.getURL('icons/icon16.png');
 };
 
 /**

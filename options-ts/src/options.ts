@@ -4,6 +4,7 @@ import {
   SettingsOperations,
   NotificationManager,
   type Settings,
+  type ExcludePattern,
 } from '@shared';
 
 let currentSettings: Settings | null = null;
@@ -58,6 +59,25 @@ function setupEventListeners() {
     checkForChanges();
   });
 
+  // Min match score slider
+  const matchScoreSlider = document.getElementById('minMatchScore') as HTMLInputElement;
+  matchScoreSlider?.addEventListener('input', (e) => {
+    const target = e.target as HTMLInputElement;
+    updateMatchScoreDisplay(parseFloat(target.value));
+    checkForChanges();
+  });
+
+  // Skip low confidence slider
+  const skipLowConfSlider = document.getElementById('skipLowConfidenceTabs') as HTMLInputElement;
+  skipLowConfSlider?.addEventListener('input', (e) => {
+    const target = e.target as HTMLInputElement;
+    updateSkipLowConfDisplay(parseFloat(target.value));
+    checkForChanges();
+  });
+
+  // Exclusion list
+  document.getElementById('addExclusionBtn')?.addEventListener('click', addExclusion);
+
   // Add change listeners to all form fields
   const formFields = [
     'maxSuggestions',
@@ -68,7 +88,10 @@ function setupEventListeners() {
     'enableContentAnalysis',
     'maxConcurrentAnalysis',
     'cacheDuration',
-    'customAIPromptRules'
+    'customAIPromptRules',
+    'minMatchScore',
+    'minTabsPerGroup',
+    'skipLowConfidenceTabs'
   ];
 
   formFields.forEach(fieldId => {
@@ -202,6 +225,29 @@ function populateForm(settings: Settings) {
   if (customPromptTextarea) {
     customPromptTextarea.value = settings.customAIPromptRules || '';
   }
+
+  // Advanced Grouping Parameters
+  const minMatchScoreSlider = document.getElementById('minMatchScore') as HTMLInputElement;
+  if (minMatchScoreSlider && settings.minMatchScore !== undefined) {
+    minMatchScoreSlider.value = settings.minMatchScore.toString();
+    updateMatchScoreDisplay(settings.minMatchScore);
+  }
+
+  const minTabsPerGroupInput = document.getElementById('minTabsPerGroup') as HTMLInputElement;
+  if (minTabsPerGroupInput && settings.minTabsPerGroup !== undefined) {
+    minTabsPerGroupInput.value = settings.minTabsPerGroup.toString();
+  }
+
+  const skipLowConfSlider = document.getElementById('skipLowConfidenceTabs') as HTMLInputElement;
+  if (skipLowConfSlider && settings.skipLowConfidenceTabs !== undefined) {
+    skipLowConfSlider.value = settings.skipLowConfidenceTabs.toString();
+    updateSkipLowConfDisplay(settings.skipLowConfidenceTabs);
+  }
+
+  // Exclusion List
+  if (settings.excludedPatterns) {
+    renderExclusionList(settings.excludedPatterns);
+  }
 }
 
 function updateConfidenceDisplay(value: number) {
@@ -277,6 +323,15 @@ function getFormData(): Partial<Settings> {
 
     // Custom AI Prompt
     customAIPromptRules: getData('customAIPromptRules') || undefined,
+
+
+    // Advanced Grouping Parameters
+    minMatchScore: parseFloat(getData('minMatchScore') || '0.7'),
+    minTabsPerGroup: parseInt(getData('minTabsPerGroup') || '2'),
+    skipLowConfidenceTabs: parseFloat(getData('skipLowConfidenceTabs') || '0.3'),
+
+    // Exclusion list is managed separately, not from form
+    excludedPatterns: currentSettings?.excludedPatterns || [],
   };
 
   // Cache duration (if element exists)
@@ -405,3 +460,192 @@ function getThresholdLabel(value: number): string {
 
 // Toast notifications handled by NotificationManager
 // No need for custom toast function
+
+// ============================================================================
+// Display Update Functions for New Sliders
+// ============================================================================
+
+function updateMatchScoreDisplay(value: number) {
+  const valueDisplay = document.getElementById('matchScoreValue');
+  if (valueDisplay) {
+    valueDisplay.textContent = value.toFixed(2);
+  }
+
+  const hint = document.getElementById('matchScoreHint');
+  if (hint) {
+    if (value <= 0.6) {
+      hint.textContent = 'More suggestions';
+    } else if (value <= 0.75) {
+      hint.textContent = 'Balanced';
+    } else {
+      hint.textContent = 'Only very similar';
+    }
+  }
+}
+
+function updateSkipLowConfDisplay(value: number) {
+  const valueDisplay = document.getElementById('skipLowConfValue');
+  if (valueDisplay) {
+    valueDisplay.textContent = value.toFixed(2);
+  }
+
+  const hint = document.getElementById('skipLowConfHint');
+  if (hint) {
+    if (value <= 0.25) {
+      hint.textContent = 'Include more';
+    } else if (value <= 0.35) {
+      hint.textContent = 'Default';
+    } else {
+      hint.textContent = 'Skip more';
+    }
+  }
+}
+
+// ============================================================================
+// Exclusion List Management
+// ============================================================================
+
+function renderExclusionList(patterns: any[]) {
+  const listContainer = document.getElementById('exclusionList');
+  if (!listContainer) return;
+
+  listContainer.innerHTML = '';
+
+  if (!patterns || patterns.length === 0) {
+    return; // CSS ::before will show empty message
+  }
+
+  patterns.forEach((pattern: any, index: number) => {
+    const item = document.createElement('div');
+    const disabledClass = pattern.enabled ? '' : ' disabled';
+    item.className = 'exclusion-item' + disabledClass;
+    item.dataset.index = index.toString();
+
+    const addedDate = new Date(pattern.addedDate).toLocaleDateString();
+    const checkedAttr = pattern.enabled ? 'checked' : '';
+    const descriptionHtml = pattern.description ? `<span> · ${escapeHtml(pattern.description)}</span>` : '';
+
+    item.innerHTML = `
+      <div class="exclusion-toggle">
+        <input type="checkbox" ${checkedAttr}
+               onchange="window.toggleExclusion(${index})">
+      </div>
+      <div class="exclusion-details">
+        <div class="exclusion-pattern">${escapeHtml(pattern.pattern)}</div>
+        <div class="exclusion-meta">
+          <span class="exclusion-type-badge">${pattern.type}</span>
+          ${descriptionHtml}
+          <span> · Added ${addedDate}</span>
+        </div>
+      </div>
+      <div class="exclusion-actions">
+        <button onclick="window.deleteExclusion(${index})" class="delete-btn">🗑 Delete</button>
+      </div>
+    `;
+
+    listContainer.appendChild(item);
+  });
+}
+
+function addExclusion() {
+  if (!currentSettings) return;
+
+  const patternInput = document.getElementById('newExclusionPattern') as HTMLInputElement;
+  const typeSelect = document.getElementById('newExclusionType') as HTMLSelectElement;
+
+  const pattern = patternInput.value.trim();
+  if (!pattern) {
+    NotificationManager.error('Please enter a pattern');
+    return;
+  }
+
+  // Validate pattern format
+  if (!isValidPattern(pattern)) {
+    NotificationManager.error('Invalid pattern. Use: example.com, *.example.com, or example.com/path/*');
+    return;
+  }
+
+  const newPattern = {
+    pattern,
+    type: typeSelect.value as 'domain' | 'subdomain' | 'uri',
+    enabled: true,
+    addedDate: Date.now()
+  };
+
+  const updatedPatterns = [...(currentSettings.excludedPatterns || []), newPattern];
+
+  // Update settings
+  SettingsOperations.save({ excludedPatterns: updatedPatterns })
+    .then(result => {
+      if (result.success) {
+        currentSettings = result.data;
+        renderExclusionList(result.data.excludedPatterns || []);
+        patternInput.value = '';
+        NotificationManager.success('Exclusion added');
+        checkForChanges();
+      }
+    });
+}
+
+// Global handlers for onclick in HTML
+(window as any).toggleExclusion = function(index: number) {
+  if (!currentSettings || !currentSettings.excludedPatterns) return;
+
+  const updatedPatterns = [...currentSettings.excludedPatterns];
+  updatedPatterns[index].enabled = !updatedPatterns[index].enabled;
+
+  SettingsOperations.save({ excludedPatterns: updatedPatterns })
+    .then(result => {
+      if (result.success) {
+        currentSettings = result.data;
+        renderExclusionList(result.data.excludedPatterns || []);
+        const status = updatedPatterns[index].enabled ? 'enabled' : 'disabled';
+        NotificationManager.success('Exclusion ' + status);
+        checkForChanges();
+      }
+    });
+};
+
+(window as any).deleteExclusion = function(index: number) {
+  if (!currentSettings || !currentSettings.excludedPatterns) return;
+
+  if (!confirm('Delete this exclusion pattern?')) return;
+
+  const updatedPatterns = currentSettings.excludedPatterns.filter((_: any, i: number) => i !== index);
+
+  SettingsOperations.save({ excludedPatterns: updatedPatterns })
+    .then(result => {
+      if (result.success) {
+        currentSettings = result.data;
+        renderExclusionList(result.data.excludedPatterns || []);
+        NotificationManager.success('Exclusion deleted');
+        checkForChanges();
+      }
+    });
+};
+
+function isValidPattern(pattern: string): boolean {
+  // Allow basic patterns: example.com, *.example.com, example.com/path/*, localhost, localhost:8080
+
+  // Special case: localhost (with optional port)
+  if (/^localhost(:\d+)?$/i.test(pattern)) {
+    return true;
+  }
+
+  // Domain with TLD: example.com, *.example.com
+  const domainPattern = /^(\*\.)?[a-z0-9]+([\-\.]{1}[a-z0-9]+)*\.[a-z]{2,}$/i;
+
+  // URI with path: example.com/path/*, localhost/path/*
+  const uriPattern = /^([a-z0-9]+([\-\.]{1}[a-z0-9]+)*(\.[a-z]{2,})?|localhost)(:\d+)?\/.*$/i;
+
+  return domainPattern.test(pattern) || uriPattern.test(pattern);
+}
+
+function escapeHtml(unsafe: string): string {
+  return unsafe
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}

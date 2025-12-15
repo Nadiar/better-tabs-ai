@@ -105,7 +105,7 @@ function Header({ hasChanges, onApply, onCancel, onAnalyze, isApplying, isAnalyz
         <button
           className="btn-secondary"
           onClick={onAnalyze}
-          disabled={isApplying || isAnalyzing}
+          disabled={isApplying || isAnalyzing || (analysisProgress && analysisProgress.status !== 'idle')}
           title="Analyze tabs and generate AI grouping suggestions (double-click to force refresh)"
         >
           {isAnalyzing && analysisProgress?.total && analysisProgress.total > 0
@@ -120,9 +120,9 @@ function Header({ hasChanges, onApply, onCancel, onAnalyze, isApplying, isAnalyz
               className="btn-secondary"
               onClick={onClearCache}
               disabled={isApplying}
-              title="Clear AI analysis cache"
+              title="Clear topic extraction cache (forces re-extraction of tab topics on next analysis)"
             >
-              🧹 Clear Cache
+              🧹 Clear Topic Cache
             </button>
             <button
               className="btn-secondary"

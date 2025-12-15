@@ -148,15 +148,26 @@ export const sampleDragDropData = {
 
 /**
  * Sample data with multiple groups
+ * Designed to support drop-positioning tests (needs 3+ tabs per group)
  */
 export const sampleMultiGroupData = {
   tabs: [
-    { id: 1, title: 'Tab 1', url: 'https://example1.com', groupId: 1 },
-    { id: 2, title: 'Tab 2', url: 'https://example2.com', groupId: 2 },
-    { id: 3, title: 'Tab 3', url: 'https://example3.com', groupId: -1 },
+    // Group 1 - 4 tabs for comprehensive testing
+    { id: 1, title: 'GitHub', url: 'https://github.com', groupId: 1 },
+    { id: 2, title: 'GitLab', url: 'https://gitlab.com', groupId: 1 },
+    { id: 3, title: 'Bitbucket', url: 'https://bitbucket.org', groupId: 1 },
+    { id: 4, title: 'SourceForge', url: 'https://sourceforge.net', groupId: 1 },
+    // Group 2 - 4 tabs for comprehensive testing
+    { id: 5, title: 'Twitter', url: 'https://twitter.com', groupId: 2 },
+    { id: 6, title: 'Facebook', url: 'https://facebook.com', groupId: 2 },
+    { id: 7, title: 'LinkedIn', url: 'https://linkedin.com', groupId: 2 },
+    { id: 8, title: 'Reddit', url: 'https://reddit.com', groupId: 2 },
+    // Ungrouped - 2 tabs
+    { id: 9, title: 'Google', url: 'https://google.com', groupId: -1 },
+    { id: 10, title: 'Bing', url: 'https://bing.com', groupId: -1 },
   ],
   groups: [
-    { id: 1, title: 'Group 1', color: 'blue', collapsed: false },
-    { id: 2, title: 'Group 2', color: 'red', collapsed: false }
+    { id: 1, title: 'Dev Tools', color: 'blue', collapsed: false },
+    { id: 2, title: 'Social Media', color: 'red', collapsed: false }
   ]
 };

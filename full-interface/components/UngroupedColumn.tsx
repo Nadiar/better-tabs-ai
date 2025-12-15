@@ -11,10 +11,11 @@ interface UngroupedColumnProps {
   onFindGroup: (tabId: number, e: React.MouseEvent) => void;
   selectedTabs: number[];
   onSelectTab: (tabId: number, e: React.MouseEvent) => void;
+  onTabContextMenu?: (e: React.MouseEvent, tab: TabData) => void;
 }
 
 // Ungrouped Tabs Column - Droppable area for ungrouped tabs
-const UngroupedColumn = React.memo(function UngroupedColumn({ tabs, duplicateTabs, suggestions, onFindGroup, selectedTabs, onSelectTab }: UngroupedColumnProps): JSX.Element {
+const UngroupedColumn = React.memo(function UngroupedColumn({ tabs, duplicateTabs, suggestions, onFindGroup, selectedTabs, onSelectTab, onTabContextMenu }: UngroupedColumnProps): JSX.Element {
   // Memoize filtered tabs to avoid recalculating on every render
   const ungroupedTabs = useMemo(() => {
     // Simply filter to ungrouped tabs - suggestions don't matter here
@@ -51,6 +52,7 @@ const UngroupedColumn = React.memo(function UngroupedColumn({ tabs, duplicateTab
                 onFindGroup={onFindGroup}
                 isSelected={selectedTabs && selectedTabs.includes(tab.id)}
                 onSelect={onSelectTab}
+                onContextMenu={onTabContextMenu}
               />
             ))
           )}

@@ -7,6 +7,9 @@ import { TopicParser } from '../dist/utils/shared/topic-parser.js';
 import { URLHelpers } from '../dist/utils/shared/url-helpers.js';
 import * as CONSTANTS from '../dist/utils/shared/constants.js';
 
+// Note: SummarizerService is loaded dynamically when needed
+// We can't use importScripts() with ES modules, so we'll import it inline when needed
+
 // AI Status enum and error messages
 const AIStatus = {
   READY: 'ready',
@@ -16,7 +19,12 @@ const AIStatus = {
   GPU_UNAVAILABLE: 'gpu-unavailable',
   STORAGE_FULL: 'storage-full',
   UNSUPPORTED_BROWSER: 'unsupported-browser',
-  UNKNOWN_ERROR: 'unknown-error'
+  UNKNOWN_ERROR: 'unknown-error',
+  // Summarizer-specific states
+  SUMMARIZER_READY: 'summarizer-ready',
+  SUMMARIZER_DOWNLOADING: 'summarizer-downloading',
+  SUMMARIZER_DOWNLOAD_REQUIRED: 'summarizer-download-required',
+  SUMMARIZER_UNAVAILABLE: 'summarizer-unavailable'
 };
 
 const AIStatusMessages = {
@@ -59,6 +67,26 @@ const AIStatusMessages = {
     short: 'Unknown Error',
     detail: 'Unable to determine AI availability',
     action: 'Check console for details'
+  },
+  [AIStatus.SUMMARIZER_READY]: {
+    short: 'Summarizer Ready',
+    detail: 'Chrome Summarizer API is ready to use',
+    action: null
+  },
+  [AIStatus.SUMMARIZER_DOWNLOADING]: {
+    short: 'Summarizer Downloading',
+    detail: 'Summarizer model is being downloaded',
+    action: 'Check progress at chrome://on-device-internals'
+  },
+  [AIStatus.SUMMARIZER_DOWNLOAD_REQUIRED]: {
+    short: 'Summarizer Download Required',
+    detail: 'Summarizer model needs to be downloaded',
+    action: 'Visit chrome://on-device-internals to download'
+  },
+  [AIStatus.SUMMARIZER_UNAVAILABLE]: {
+    short: 'Summarizer Unavailable',
+    detail: 'Chrome Summarizer API is not available (requires Chrome 138+)',
+    action: 'Update Chrome or enable Summarization API flag'
   }
 };
 
@@ -219,16 +247,46 @@ class CacheManager {
 }
 
 // Default Settings (Phase E)
-const PROMPT_VERSION = 8; // Increment when updating DEFAULT_AI_PROMPT_RULES or topic extraction format
+const PROMPT_VERSION = 10; // Increment when updating DEFAULT_AI_PROMPT_RULES or topic extraction format
 
-const DEFAULT_AI_PROMPT_RULES = `RULES:
-1. ONLY group tabs about the EXACT SAME topic
-2. Each tab confidence: 0.9+ if perfect match, <0.7 if doesn't belong
-3. Need 3+ tabs with 0.9+ confidence minimum
-4. Different topics = LEAVE UNGROUPED
+const DEFAULT_AI_PROMPT_RULES = `CRITICAL GROUPING RULES:
 
-❌ DON'T: Mix unrelated tabs (comics+politics+kubernetes)
-✅ DO: "Discord" = all Discord tabs only`;
+1. **SPECIFIC TOPICS ONLY** - NO generic categories
+   ❌ BAD: "Software Development" (too broad)
+   ✅ GOOD: "GitHub better-tabs-ai Project" (specific repo)
+   ❌ BAD: "Social Media" (5 different platforms)
+   ✅ GOOD: "Reddit r/politics Discussion" (specific subreddit)
+
+2. **EXACT SAME ACTIVITY** - Not just same website
+   ❌ BAD: All Reddit tabs together (different subreddits = different topics)
+   ✅ GOOD: Multiple tabs from r/woodworking (same community)
+   ❌ BAD: All Google tabs together (Search, Maps, Sheets are different)
+   ✅ GOOD: Multiple Google Sheets about same project
+
+3. **FOCUS ON TOPIC MATCHING**:
+   - ALL tabs must share the EXACT SAME specific topic
+   - Users configure minimum tab count (typically 2-3)
+   - Users configure confidence thresholds via settings
+   - If in doubt about topic match, DON'T GROUP IT
+
+4. **WHEN TO SKIP**:
+   - Mixed topics from same domain = skip
+   - Generic category name = you're doing it wrong
+   - Tabs about different specific things = skip
+
+5. **GOOD GROUP EXAMPLES**:
+   ✅ "Baby Ketten Klub Karaoke" = multiple tabs all about this specific venue
+   ✅ "ComicRack Metadata" = multiple tabs about ComicInfo.xml format
+   ✅ "Woodworking Track Saw Projects" = multiple tabs about track saw techniques
+
+6. **BAD GROUP EXAMPLES** (DO NOT CREATE THESE):
+   ❌ "Home & DIY" = mixing woodworking + gardening + home repair
+   ❌ "Development Tools" = mixing GitHub + VSCode + Kubernetes
+   ❌ "Online Services" = mixing different websites
+   ❌ Any group where tabs are about different specific things
+
+**GROUPING PHILOSOPHY**: Focus on identifying tabs with the EXACT SAME specific topic. The algorithm handles confidence thresholds, minimum tab counts, and match scoring based on user preferences in settings. Your job is topic identification, not filtering.`;
+
 
 const DEFAULT_SETTINGS = {
   // AI Analysis Settings
@@ -237,7 +295,7 @@ const DEFAULT_SETTINGS = {
   minTabConfidence: 0.5,           // Minimum per-tab confidence to include in group
   correlationMode: 'similar',      // 'exact' | 'similar' | 'loose'
   maxSuggestions: 10,              // Maximum suggestions to show
-  minTabsForSuggestion: 2,         // Minimum tabs needed to suggest a group
+  minTabsForSuggestion: 3,         // Minimum tabs needed to suggest a group (changed from 2 to 3)
   customAIPromptRules: DEFAULT_AI_PROMPT_RULES, // Customizable AI prompt rules
   promptVersion: PROMPT_VERSION,   // Track which version of prompt is in use
   promptCustomized: false,         // Whether user has customized the prompt
@@ -265,6 +323,12 @@ class BetterTabsAI {
     this.analysisInProgress = false;
     this.analysisProgress = { current: 0, total: 0, status: 'idle' };
     this.aiConversationLog = []; // Track all AI prompts/responses for debugging
+
+    // Summarizer Service integration (will be loaded dynamically)
+    this.summarizerService = null;
+    this.isSummarizerAvailable = false;
+    this.summarizerStatus = AIStatus.SUMMARIZER_UNAVAILABLE;
+
     this.init();
   }
 
@@ -283,6 +347,13 @@ class BetterTabsAI {
       } catch (error) {
         console.log('Failed to create AI session on startup:', error);
       }
+    }
+
+    // Start periodic session cleanup (every 5 minutes)
+    if (this.isSummarizerAvailable) {
+      setInterval(() => {
+        this.summarizerService.cleanupOldSessions();
+      }, 5 * 60 * 1000);
     }
   }
 
@@ -345,6 +416,35 @@ class BetterTabsAI {
 
   async checkAIAvailability() {
     try {
+      // Check Summarizer API availability directly
+      // Note: Can't use dynamic import() in service workers, so check API directly
+      let summarizerAvailability = 'no';
+      try {
+        if ('ai' in self && 'summarizer' in self.ai) {
+          summarizerAvailability = await self.ai.summarizer.availability();
+          console.log('Found ai.summarizer API, availability:', summarizerAvailability);
+        } else if ('Summarizer' in self) {
+          summarizerAvailability = await Summarizer.availability();
+          console.log('Found Summarizer API, availability:', summarizerAvailability);
+        }
+      } catch (error) {
+        console.warn('Error checking Summarizer API:', error);
+      }
+      if (summarizerAvailability === 'readily-available') {
+        this.isSummarizerAvailable = true;
+        this.summarizerStatus = AIStatus.SUMMARIZER_READY;
+        console.log('✅ Summarizer API is ready to use');
+      } else if (summarizerAvailability === 'after-download') {
+        this.summarizerStatus = AIStatus.SUMMARIZER_DOWNLOAD_REQUIRED;
+        console.log('🟡 Summarizer API needs download');
+      } else if (summarizerAvailability === 'downloading') {
+        this.summarizerStatus = AIStatus.SUMMARIZER_DOWNLOADING;
+        console.log('⏳ Summarizer API is downloading');
+      } else {
+        this.summarizerStatus = AIStatus.SUMMARIZER_UNAVAILABLE;
+        console.log('❌ Summarizer API not available');
+      }
+
       // Check for Chrome's built-in LanguageModel API
       if (typeof self.ai !== 'undefined' && self.ai.languageModel) {
         console.log('Found ai.languageModel API');
@@ -487,9 +587,10 @@ class BetterTabsAI {
           break;
 
         case 'clearCache':
-          await chrome.storage.local.remove(['lastAnalysisResults', 'lastAnalysisTime', 'lastTabsHash']);
+          // Only clear summary cache (tab topic extraction cache)
+          // Don't clear analysis results - user can click Analyze to force refresh
           this.summaryCache.clear();
-          console.log('🧹 Analysis cache and summary cache cleared');
+          console.log('🧹 Summary cache cleared (topic extraction will be regenerated)');
           sendResponse({ success: true });
           break;
 
@@ -672,6 +773,7 @@ class BetterTabsAI {
 
   async generateTabSummary(tab) {
     // Generate a concise, context-rich summary for a tab
+    // Uses Summarizer API if available, falls back to Prompt API
     // This is cached and used to reduce token usage in grouping prompts
     const metadata = {
       title: tab.title || '',
@@ -690,46 +792,55 @@ class BetterTabsAI {
 
     console.log('❌ Summary cache miss, generating:', metadata.title);
 
+    // Try to extract page content using content script (already injected via manifest)
+    let pageContent = null;
+    try {
+      // Send message to content script to extract metadata + basic content
+      const response = await chrome.tabs.sendMessage(tab.id, {
+        action: 'extractContent',
+        stage: 'basic' // Get metadata + headings + excerpt
+      });
+
+      if (response?.success && response?.content) {
+        const extracted = response.content;
+        // Transform content script format to expected format
+        pageContent = {
+          description: extracted.metadata?.description || '',
+          keywords: extracted.metadata?.keywords || '',
+          ogType: extracted.metadata?.type || '',
+          headings: extracted.content?.headings?.map(h => h.text).slice(0, 5) || [],
+          excerpt: extracted.content?.excerpt || '',
+          text: extracted.content?.text || '' // Full text for Summarizer API
+        };
+      }
+
+      // Log what we extracted
+      if (pageContent && !pageContent.error) {
+        console.log(`📄 Content extracted for "${metadata.title}":`, {
+          hasDescription: !!pageContent.description,
+          descriptionLength: pageContent.description?.length || 0,
+          hasKeywords: !!pageContent.keywords,
+          keywordsLength: pageContent.keywords?.length || 0,
+          ogType: pageContent.ogType || 'none',
+          headingCount: pageContent.headings?.length || 0,
+          excerptLength: pageContent.excerpt?.length || 0,
+          textLength: pageContent.text?.length || 0
+        });
+      }
+    } catch (error) {
+      // Content script not available (chrome://, discarded tabs, etc.)
+      // This is expected and fine - we'll just use title + domain
+    }
+
+    // Note: Summarizer API integration commented out because dynamic import()
+    // is not supported in service workers. Future: Consider using Summarizer API
+    // directly without the wrapper class, or use a different architecture.
+    //
+    // For now, using Prompt API for all tab summarization.
+
     try {
       if (!this.aiSession) {
         await this.createAISession();
-      }
-
-      // Try to extract page content (metadata + text excerpt)
-      let pageContent = null;
-      try {
-        const contentResult = await chrome.scripting.executeScript({
-          target: { tabId: tab.id },
-          func: () => {
-            try {
-              // Get meta description
-              const metaDesc = document.querySelector('meta[name="description"]')?.content ||
-                              document.querySelector('meta[property="og:description"]')?.content || '';
-
-              // Get page headings (h1, h2)
-              const headings = Array.from(document.querySelectorAll('h1, h2'))
-                .map(h => h.textContent?.trim())
-                .filter(text => text && text.length > 0 && text.length < 100)
-                .slice(0, 5);
-
-              // Get first 300 characters of visible text content
-              const textContent = document.body?.innerText || '';
-              const excerpt = textContent.substring(0, 300).replace(/\s+/g, ' ').trim();
-
-              return {
-                description: metaDesc,
-                headings: headings,
-                excerpt: excerpt
-              };
-            } catch (error) {
-              return { error: error.message };
-            }
-          }
-        });
-        pageContent = contentResult[0]?.result;
-      } catch (error) {
-        // Expected for Chrome system pages (chrome://, chrome-extension://, etc.)
-        // These pages are restricted and cannot be accessed by extensions
       }
 
       // Build prompt with available context
@@ -742,10 +853,17 @@ class BetterTabsAI {
         promptParts.push(`Domain: ${metadata.domain}`);
       }
 
-      // Add metadata if available (budget ~500 chars total for metadata+content)
+      // Add metadata if available (budget ~600 chars total for metadata+content)
       if (pageContent) {
+        // Keywords are VERY valuable - prioritize them
+        if (pageContent.keywords) {
+          promptParts.push(`Keywords: ${pageContent.keywords.substring(0, 100)}`);
+        }
         if (pageContent.description) {
           promptParts.push(`Description: ${pageContent.description.substring(0, 150)}`);
+        }
+        if (pageContent.ogType) {
+          promptParts.push(`Type: ${pageContent.ogType}`);
         }
         if (pageContent.headings && pageContent.headings.length > 0) {
           promptParts.push(`Headings: ${pageContent.headings.slice(0, 3).join(', ')}`);
@@ -756,22 +874,33 @@ class BetterTabsAI {
         }
       }
 
-      const prompt = `Extract 1-3 specific topic keywords with confidence (0-1) for this page.
+      const prompt = `Extract EXACTLY 6 topics for this page (count: 1, 2, 3, 4, 5, 6), from most specific to most general.
 
 ${promptParts.join('\n')}
 
-Format: "keyword:confidence,keyword:confidence"
-Be SPECIFIC, not generic. Higher confidence = more specific/unique topic.
+CRITICAL RULES:
+1. Extract EXACTLY 6 topics (not 4, not 5 - must be 6)
+2. Extract topics from the Title and Domain (analyze what the page is about)
+3. Use actual content keywords (NOT generic terms like "online", "platform", "service", "website")
+4. Avoid generic terms: technology, software, internet, web, digital, platform, service, site
 
-Examples:
-- "github:0.9,better-tabs-ai:0.95" (very specific project)
-- "reddit:0.8,politics:0.9" (specific subreddit)
-- "discord:0.7,social:0.3" (Discord specific, social generic)
-- "localhost:0.4,development:0.3" (both generic)
-- "karaoke:0.95,portland:0.8" (very specific activity + location)`;
+Required format (6 topics with these exact scores):
+"topic1:0.95 > topic2:0.88 > topic3:0.80 > topic4:0.70 > topic5:0.58 > topic6:0.45"
+
+Good examples (6 topics each, extracted from title/domain):
+"traefik-kubernetes:0.95 > traefik:0.88 > reverse-proxy:0.80 > networking:0.70 > infrastructure:0.58 > devops:0.45"
+"reddit-politics:0.95 > reddit:0.88 > social-media:0.80 > forum:0.70 > discussion:0.58 > community:0.45"
+"github-copilot:0.95 > github:0.88 > code-assistant:0.80 > development-tools:0.70 > programming:0.58 > automation:0.45"
+"baby-ketten-klub:0.95 > karaoke-bar:0.88 > karaoke:0.80 > nightlife:0.70 > entertainment:0.58 > venue:0.45"
+
+BAD - WRONG (only 4 topics - FAIL):
+"account:0.95 > user:0.90 > online-service:0.85 > web-platform:0.70"
+
+Your 6 topics:`;
 
       const response = await this.promptAI(prompt, `topic-extraction:${metadata.domain}`);
-      const cleanResponse = response.trim().toLowerCase().replace(/[^a-z0-9,:.-]/g, '');
+      // Preserve hierarchy delimiters: | (taxonomies) and > (hierarchy levels)
+      const cleanResponse = response.trim().toLowerCase().replace(/[^a-z0-9,:.\->|]/g, '');
 
       // Cache the result
       this.summaryCache.set(cacheKey, cleanResponse);
@@ -782,6 +911,52 @@ Examples:
       // Fallback to domain + title if AI fails
       return `${metadata.domain}: ${metadata.title.substring(0, 50)}`;
     }
+  }
+
+  /**
+   * Convert Summarizer API key points to topic format
+   * @param {string} keyPoints - Key points from Summarizer API
+   * @param {Object} metadata - Tab metadata
+   * @returns {string} - Topics in format "topic1:0.95 > topic2:0.88 > ..."
+   */
+  convertKeyPointsToTopics(keyPoints, metadata) {
+    // Extract keywords from key points (bullet points or sentences)
+    const lines = keyPoints.split('\n').filter(line => line.trim());
+    const topics = [];
+
+    // Parse key points and extract meaningful topics
+    for (const line of lines.slice(0, 6)) { // Max 6 topics
+      const cleaned = line
+        .replace(/^[-*•]\s*/, '') // Remove bullet points
+        .toLowerCase()
+        .replace(/[^\w\s-]/g, '')  // Remove punctuation
+        .trim();
+
+      if (cleaned.length > 3 && cleaned.length < 50) {
+        // Convert spaces to hyphens for topic format
+        const topic = cleaned.substring(0, 30).replace(/\s+/g, '-');
+        topics.push(topic);
+      }
+    }
+
+    // Add domain as a topic if we don't have enough
+    if (topics.length < 3) {
+      topics.push(metadata.domain.replace(/\./g, '-'));
+    }
+
+    // Ensure we have exactly 6 topics, fill with generic if needed
+    while (topics.length < 6) {
+      topics.push('content'); // Generic fallback
+    }
+
+    // Assign confidence scores (decreasing from 0.95 to 0.45)
+    const confidences = [0.95, 0.88, 0.80, 0.70, 0.58, 0.45];
+    const topicString = topics
+      .slice(0, 6)
+      .map((topic, i) => `${topic}:${confidences[i]}`)
+      .join(' > ');
+
+    return topicString;
   }
 
   // Removed: extractDomain() and extractPath() - moved to utils/shared/url-helpers.ts
@@ -1217,8 +1392,9 @@ Examples:
   }
 
   /**
-   * Calculate topic overlap score between two tabs using WEIGHTED confidence
-   * Returns 0-1 score based on shared topics, their confidence, and domain
+   * Calculate topic overlap using hierarchical taxonomy matching
+   * Compares each taxonomy chain from tab1 with each taxonomy chain from tab2
+   * Returns best match score found across all taxonomy comparisons
    */
   calculateTopicOverlap(tab1, tab2) {
     const topics1 = this.parseTopicsWithConfidence(tab1.topics);
@@ -1226,42 +1402,214 @@ Examples:
 
     if (topics1.length === 0 || topics2.length === 0) return 0;
 
-    // Build topic maps for faster lookup
-    const topicMap1 = new Map(topics1.map(t => [t.topic, t.confidence]));
-    const topicMap2 = new Map(topics2.map(t => [t.topic, t.confidence]));
+    // Group topics by taxonomy index (each taxonomy is independent)
+    const taxonomies1 = this._groupByTaxonomy(topics1);
+    const taxonomies2 = this._groupByTaxonomy(topics2);
 
-    // Calculate weighted overlap
-    let overlapScore = 0;
-    let maxPossibleScore = 0;
+    let bestScore = 0;
+    let bestMatch = null;
 
-    // For each topic in tab1, check if it exists in tab2
-    topics1.forEach(({ topic, confidence }) => {
-      if (topicMap2.has(topic)) {
-        // Both tabs have this topic - use average confidence as weight
-        const conf2 = topicMap2.get(topic);
-        const avgConfidence = (confidence + conf2) / 2;
-        overlapScore += avgConfidence; // Weighted by how confident both are
-      }
-      maxPossibleScore += confidence; // Max possible if all topics matched
+    // Compare each taxonomy from tab1 with each taxonomy from tab2
+    taxonomies1.forEach((tax1, idx1) => {
+      taxonomies2.forEach((tax2, idx2) => {
+        const result = this._compareTaxonomies(tax1, tax2);
+        if (result.score > bestScore) {
+          bestScore = result.score;
+          bestMatch = { tax1, tax2, ...result };
+        }
+      });
     });
 
-    // Also consider topics only in tab2
-    topics2.forEach(({ topic, confidence }) => {
-      if (!topicMap1.has(topic)) {
-        maxPossibleScore += confidence;
+    // Log only if we found a meaningful match (reduce console noise)
+    if (bestScore >= 0.5) {
+      const tax1Str = bestMatch.tax1.map(t => `${t.topic}:${t.confidence.toFixed(2)}`).join(' > ');
+      const tax2Str = bestMatch.tax2.map(t => `${t.topic}:${t.confidence.toFixed(2)}`).join(' > ');
+      const matchInfo = bestMatch.matches.map(m => `${m.topic}(${m.type})`).join(', ');
+      console.log(`  ✓ Match (${bestScore.toFixed(2)}): ${matchInfo}\n    [${tax1Str}]\n    [${tax2Str}]`);
+    }
+
+    return bestScore;
+  }
+
+  /**
+   * Group topics by taxonomy index (each taxonomy is a separate hierarchy)
+   */
+  _groupByTaxonomy(topics) {
+    const taxonomies = new Map();
+
+    topics.forEach(topic => {
+      const idx = topic.taxonomyIndex ?? 0;
+      if (!taxonomies.has(idx)) {
+        taxonomies.set(idx, []);
       }
+      taxonomies.get(idx).push(topic);
     });
 
-    // Normalize to 0-1 range
-    const topicScore = maxPossibleScore > 0 ? overlapScore / maxPossibleScore : 0;
+    // Sort each taxonomy by confidence (most specific first)
+    taxonomies.forEach((topics, idx) => {
+      topics.sort((a, b) => b.confidence - a.confidence);
+    });
 
-    // Domain boost (but only if both have meaningful topics)
-    const domain1 = tab1.domain || '';
-    const domain2 = tab2.domain || '';
-    const domainMatch = domain1 === domain2 ? 0.2 : 0;
+    return Array.from(taxonomies.values());
+  }
 
-    // High-confidence topic matches are more important than domain
-    return Math.min(1.0, topicScore + domainMatch);
+  /**
+   * Compare two taxonomy chains and return match score
+   * Uses geometric mean of all matching topic confidences (no artificial scaling)
+   * Supports cross-hierarchy matching since tier 2 on one page may equal tier 3 on another
+   */
+  _compareTaxonomies(tax1, tax2) {
+    // Generic terms that should not be considered matches (too broad to be meaningful)
+    const GENERIC_TERMS = new Set([
+      'technology', 'software', 'internet', 'online', 'web', 'digital',
+      'content', 'information', 'media', 'services', 'platform', 'application',
+      'website', 'page', 'site', 'online-service', 'web-platform'
+    ]);
+
+    const matches = [];
+
+    // Compare all topics across both taxonomies (cross-hierarchy matching)
+    for (const topic1 of tax1) {
+      // Skip generic terms
+      if (GENERIC_TERMS.has(topic1.topic)) continue;
+
+      for (const topic2 of tax2) {
+        // Skip generic terms
+        if (GENERIC_TERMS.has(topic2.topic)) continue;
+
+        // Exact match on topic - record both confidences
+        if (topic1.topic === topic2.topic) {
+          matches.push({
+            confidence1: topic1.confidence,
+            confidence2: topic2.confidence,
+            type: 'exact',
+            topic: topic1.topic
+          });
+          continue;
+        }
+
+        // Check if one topic appears in the other's hierarchy
+        if (topic1.hierarchy && topic1.hierarchy.includes(topic2.topic)) {
+          matches.push({
+            confidence1: topic1.confidence,
+            confidence2: topic2.confidence,
+            type: 'hierarchy',
+            topic: topic2.topic
+          });
+          continue;
+        }
+        if (topic2.hierarchy && topic2.hierarchy.includes(topic1.topic)) {
+          matches.push({
+            confidence1: topic1.confidence,
+            confidence2: topic2.confidence,
+            type: 'hierarchy',
+            topic: topic1.topic
+          });
+          continue;
+        }
+
+        // Partial word match (e.g., "karaoke" in both) - only for words > 3 chars
+        const words1 = topic1.topic.split('-');
+        const words2 = topic2.topic.split('-');
+        const commonWords = words1.filter(w =>
+          words2.includes(w) && w.length > 3 && !GENERIC_TERMS.has(w)
+        );
+
+        if (commonWords.length > 0) {
+          matches.push({
+            confidence1: topic1.confidence,
+            confidence2: topic2.confidence,
+            type: 'partial',
+            topic: commonWords.join('-')
+          });
+        }
+      }
+    }
+
+    if (matches.length === 0) return { score: 0, matches: [] };
+
+    // Calculate geometric mean of all matching confidences
+    // Formula: (c1 * c2 * c3 * ... * cn)^(1/n)
+    const product = matches.reduce((prod, match) => {
+      return prod * match.confidence1 * match.confidence2;
+    }, 1);
+
+    const totalValues = matches.length * 2; // Each match has 2 confidence values
+    const geometricMean = Math.pow(product, 1 / totalValues);
+
+    return {
+      score: geometricMean,
+      matches: matches
+    };
+  }
+
+  /**
+   * Check if a tab URL matches any exclusion pattern
+   * @param {string} url - Tab URL to check
+   * @returns {boolean} - True if tab should be excluded from grouping
+   */
+  _isExcluded(url) {
+    if (!this.settings.excludedPatterns || this.settings.excludedPatterns.length === 0) {
+      return false;
+    }
+
+    try {
+      const urlObj = new URL(url);
+      const hostname = urlObj.hostname;
+      const pathname = urlObj.pathname;
+
+      for (const pattern of this.settings.excludedPatterns) {
+        if (!pattern.enabled) continue;
+
+        switch (pattern.type) {
+          case 'domain':
+            // Exact domain match: example.com
+            if (hostname === pattern.pattern) {
+              console.log(`    ⊘ Excluded by domain pattern: ${pattern.pattern}`);
+              return true;
+            }
+            break;
+
+          case 'subdomain':
+            // Wildcard subdomain match: *.example.com
+            if (pattern.pattern.startsWith('*.')) {
+              const baseDomain = pattern.pattern.substring(2);
+              if (hostname === baseDomain || hostname.endsWith('.' + baseDomain)) {
+                console.log(`    ⊘ Excluded by subdomain pattern: ${pattern.pattern}`);
+                return true;
+              }
+            } else if (hostname === pattern.pattern) {
+              console.log(`    ⊘ Excluded by domain pattern: ${pattern.pattern}`);
+              return true;
+            }
+            break;
+
+          case 'uri':
+            // URI path matching: example.com/docs/*
+            const [patternHost, ...patternPathParts] = pattern.pattern.split('/');
+            const patternPath = '/' + patternPathParts.join('/');
+
+            if (hostname === patternHost) {
+              // Simple wildcard matching
+              if (patternPath.endsWith('/*')) {
+                const basePath = patternPath.slice(0, -2);
+                if (pathname.startsWith(basePath)) {
+                  console.log(`    ⊘ Excluded by URI pattern: ${pattern.pattern}`);
+                  return true;
+                }
+              } else if (pathname === patternPath) {
+                console.log(`    ⊘ Excluded by URI pattern: ${pattern.pattern}`);
+                return true;
+              }
+            }
+            break;
+        }
+      }
+    } catch (error) {
+      console.warn('Error checking exclusion pattern:', error);
+    }
+
+    return false;
   }
 
   /**
@@ -1281,10 +1629,16 @@ Examples:
       const anchor = tabData[i];
       const anchorTopics = this.parseTopicsWithConfidence(anchor.topics);
 
+      // Skip excluded tabs
+      if (this._isExcluded(anchor.url)) {
+        console.log(`  ⊘ Skipping excluded tab ${i}: ${anchor.title}`);
+        continue;
+      }
+
       // Skip tabs with ONLY very low-confidence topics (but be lenient - we raised generic cap to 0.5)
       const maxConfidence = Math.max(...anchorTopics.map(t => t.confidence), 0);
-      if (maxConfidence < 0.3) {
-        console.log(`  ⚠️ Skipping tab ${i} - all topics below 0.3 confidence (max: ${maxConfidence.toFixed(2)})`);
+      if (maxConfidence < this.settings.skipLowConfidenceTabs) {
+        console.log(`  ⚠️ Skipping tab ${i} - all topics below ${this.settings.skipLowConfidenceTabs} confidence (max: ${maxConfidence.toFixed(2)})`);
         continue;
       }
 
@@ -1297,15 +1651,21 @@ Examples:
         const candidate = tabData[j];
         const overlap = this.calculateTopicOverlap(anchor, candidate);
 
-        // Require at least 0.5 weighted overlap
-        if (overlap >= 0.5) {
+        // Skip excluded tabs
+        if (this._isExcluded(candidate.url)) {
+          continue;
+        }
+
+        // Include matches with geometric mean >= settings threshold (good topic overlap)
+        // User has final say on grouping, so be inclusive
+        if (overlap >= this.settings.minMatchScore) {
           group.push({ tab: candidate, index: j, score: overlap });
           console.log(`  ✓ Match: Tab ${i} ↔ Tab ${j} (overlap: ${overlap.toFixed(2)})`);
         }
       }
 
-      // Only create candidate if we have 3+ tabs
-      if (group.length >= 3) {
+      // Only create candidate if we have minimum tab threshold from settings (user decides if they want to group)
+      if (group.length >= this.settings.minTabsPerGroup) {
         // Mark tabs as used
         group.forEach(item => used.add(item.index));
 
@@ -1342,6 +1702,11 @@ Examples:
     }
 
     console.log(`✓ Created ${candidates.length} candidate groups`);
+    console.log(`✅ Created ${candidates.length} candidate groups from topic matching`);
+    candidates.forEach((c, i) => {
+      console.log(`  Candidate ${i+1}: "${c.suggestedName}" - ${c.tabs.length} tabs, avg score: ${c.avgScore.toFixed(2)}`);
+    });
+    
     return candidates;
   }
 
@@ -1351,15 +1716,32 @@ Examples:
    */
   async validateCandidateGroup(candidate) {
     try {
-      const tabList = candidate.tabs.map((tab, i) =>
-        `${i + 1}. "${tab.title}" (${tab.topics || 'no topics'}) @${tab.domain}`
-      ).join('\n');
+      const tabList = candidate.tabs.map((tab, i) => {
+        const parts = [
+          `${i + 1}. "${tab.title}"`,
+          `@${tab.domain}`
+        ];
+
+        // Include summary/description if available (for better context)
+        if (tab.summary && tab.summary !== tab.topics) {
+          parts.push(`- ${tab.summary}`);
+        }
+
+        // Include topics hierarchy
+        if (tab.topics) {
+          parts.push(`(topics: ${tab.topics})`);
+        }
+
+        return parts.join(' ');
+      }).join('\n');
 
       const prompt = `Do these ${candidate.tabs.length} tabs belong in ONE group?
 
 ${tabList}
 
-Analyze if they share the SAME specific topic. Respond ONLY with JSON:
+Analyze if they share a RELATED topic (can be different aspects of the same domain).
+Consider both the titles/summaries AND the topic hierarchies.
+Respond ONLY with JSON:
 
 {
   "belongs": true,
@@ -1380,10 +1762,11 @@ OR if some don't belong:
 }
 
 Rules:
-- belongs=true ONLY if ALL tabs share the exact same topic
-- excludeIndices are 1-based indices of tabs that don't fit
-- groupName must be SPECIFIC, not generic (e.g., "GitHub Projects" not "Technology")
-- If fewer than 3 tabs remain after exclusions, set belongs=false`;
+- belongs=true if tabs share a common domain/ecosystem (e.g., "Comic Books", "GitHub Projects", "VSCode Development")
+- Different tools/aspects within same domain ARE valid (e.g., comic database + comic reader = both comics)
+- excludeIndices are 1-based indices of tabs that are completely unrelated
+- groupName must be SPECIFIC, not generic (e.g., "Comic Books & Tools" not "Technology")
+- If fewer than ${this.settings.minTabsPerGroup} tabs remain after exclusions, set belongs=false`;
 
       const response = await this.promptAI(prompt, `validate-group:${candidate.tabs.length}-tabs`);
 
@@ -1451,7 +1834,7 @@ Rules:
           !validation.excludeIndices.includes(i + 1)
         );
 
-        if (includedTabs.length >= 3) {
+        if (includedTabs.length >= this.settings.minTabsPerGroup) {
           const tabIds = includedTabs.map(t => t.id);
           const tabConfidences = {};
           includedTabs.forEach((tab) => {
@@ -1597,17 +1980,17 @@ Keys: name=groupName, tabs=array of {i:index,c:confidence}, conf=groupConfidence
           confidence: groupConf,
           tabs: tabs // Array of {id, confidence}
         };
-      }).filter(s => s.tabs.length >= 2); // Remove groups with <2 tabs
+      }).filter(s => s.tabs.length >= this.settings.minTabsPerGroup); // Enforce 2-tab minimum (user decides if they want to group)
 
       console.log(`✅ Generated ${suggestions.length} AI-suggested groups`);
 
-      // Filter by minimum confidence threshold
+      // Filter by minimum confidence threshold and minimum tab count
       const filtered = suggestions.filter(s =>
         s.confidence >= this.settings.minConfidenceThreshold &&
         s.tabs &&
-        s.tabs.length >= 2
+        s.tabs.length >= this.settings.minTabsForSuggestion
       );
-      console.log(`🎯 Filtered to ${filtered.length} suggestions (threshold: ${this.settings.minConfidenceThreshold})`);
+      console.log(`🎯 Filtered to ${filtered.length} suggestions (confidence >= ${this.settings.minConfidenceThreshold}, tabs >= ${this.settings.minTabsForSuggestion})`);
 
       // Sort by confidence and tab count (larger, more confident groups first)
       filtered.sort((a, b) => {
@@ -1694,7 +2077,7 @@ Keys: name=groupName, tabs=array of {i:index,c:confidence}, conf=groupConfidence
     const filtered = merged.filter(s =>
       s.confidence >= this.settings.minConfidenceThreshold &&
       s.tabIds &&
-      s.tabIds.length >= 2
+      s.tabIds.length >= this.settings.minTabsPerGroup // Enforce 2-tab minimum (user decides)
     );
 
     // Sort by confidence and tab count
@@ -1804,7 +2187,7 @@ Respond with ONLY a JSON object:
         tabIds: assignedTabIds,
         tabConfidences: tabConfidences // Per-tab confidence for UI
       };
-    }).filter(s => s.tabIds.length >= 2);
+    }).filter(s => s.tabIds.length >= this.settings.minTabsPerGroup); // Enforce 2-tab minimum (user decides)
   }
 
   // Removed: deduplicateSuggestions() - replaced by deduplicateSuggestionsSimple() for new tabIds format

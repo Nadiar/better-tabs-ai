@@ -110,6 +110,17 @@ export interface AnalysisProgress {
 // ============================================================================
 
 /**
+ * Exclude pattern for filtering tabs from AI grouping
+ */
+export interface ExcludePattern {
+  pattern: string;        // e.g., "*.example.com" or "example.com/path/*"
+  type: 'domain' | 'subdomain' | 'uri';
+  enabled: boolean;
+  addedDate: number;
+  description?: string;   // Optional user note
+}
+
+/**
  * User settings configuration
  */
 export interface Settings {
@@ -124,6 +135,14 @@ export interface Settings {
   showInlineSuggestions: boolean;
   defaultGroupColor: ChromeColor;
   showAdvancedOptions: boolean;
+
+  // Advanced Grouping Parameters
+  minMatchScore: number;              // Minimum geometric mean for grouping (0.5-0.9)
+  minTabsPerGroup: number;            // Minimum tabs required for a group (2-5)
+  skipLowConfidenceTabs: number;      // Skip tabs with max topic < this (0.2-0.5)
+
+  // Exclusion List
+  excludedPatterns: ExcludePattern[]; // Sites to exclude from AI grouping
 
   // Performance (deprecated but kept for compatibility)
   enableContentAnalysis: boolean;
@@ -142,6 +161,15 @@ export const DEFAULT_SETTINGS: Settings = {
   showInlineSuggestions: true,
   defaultGroupColor: 'grey',
   showAdvancedOptions: false,
+
+  // Advanced Grouping (Phase A - Jan 2025)
+  minMatchScore: 0.7,              // Geometric mean threshold for grouping
+  minTabsPerGroup: 2,              // Allow 2-tab groups
+  skipLowConfidenceTabs: 0.3,      // Skip tabs with all topics < 30% confidence
+
+  // Exclusion List (Phase A - Jan 2025)
+  excludedPatterns: [],            // No exclusions by default
+
   enableContentAnalysis: true,
   maxConcurrentAnalysis: 10,
   cacheDuration: 60000,

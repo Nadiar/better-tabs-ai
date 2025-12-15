@@ -1,38 +1,37 @@
 /**
  * Topic Parser Utility
  *
- * Parses topic strings with confidence scores and applies weighted penalty system
- * to penalize generic/broad categories while preserving specific topic relevance.
+ * Parses hierarchical topic taxonomies with confidence scores.
+ * Each tab can have multiple taxonomies (e.g., product + platform + location).
+ * Each taxonomy is a hierarchy from specific → general.
  */
 
 export interface ParsedTopic {
   topic: string;
   confidence: number;
+  hierarchy?: string[]; // Array of parent topics (specific → general)
+  taxonomyIndex?: number; // Which taxonomy this belongs to (0-based)
 }
 
 /**
- * Parses a comma-separated topic string with confidence scores.
+ * Parses hierarchical topic taxonomies with confidence scores.
  *
- * Supports formats:
- * - "topic:0.9,another:0.8" (with confidence)
- * - "topic,another" (defaults to 0.5 confidence)
+ * Format:
+ * - Multiple taxonomies separated by " | "
+ * - Each taxonomy: "specific:conf > general:conf > broader:conf"
+ * - Legacy format: "topic:conf,topic:conf" (flat keywords)
  *
- * Applies tiered penalty system:
- * - Tier 1: Useless words (capped at 0.2) - "page", "site", "web"
- * - Tier 2: Broad categories (×0.5) - "shopping", "social-media", "news"
- * - Tier 3: Somewhat generic (×0.7) - "home", "account", "development"
- * - Tier 4: Activity words (×0.85) - "login", "search", "browse"
- * - Specific topics keep full confidence - "github", "better-tabs-ai"
- *
- * @param topicsString - Comma-separated topic string
- * @returns Array of parsed topics with adjusted confidence scores
+ * @param topicsString - Hierarchical taxonomy string
+ * @returns Array of parsed topics with hierarchy information
  *
  * @example
- * TopicParser.parse("github:0.9,shopping:0.8,login:0.7")
+ * TopicParser.parse("baby-ketten-klub:0.95 > karaoke-club:0.9 > karaoke:0.85 | portland:0.8 > oregon:0.6")
  * // Returns: [
- * //   { topic: "github", confidence: 0.9 },      // Specific - no penalty
- * //   { topic: "shopping", confidence: 0.4 },    // Broad - 50% penalty
- * //   { topic: "login", confidence: 0.595 }      // Activity - 15% penalty
+ * //   { topic: "baby-ketten-klub", confidence: 0.95, hierarchy: ["karaoke-club", "karaoke"], taxonomyIndex: 0 },
+ * //   { topic: "karaoke-club", confidence: 0.9, hierarchy: ["karaoke"], taxonomyIndex: 0 },
+ * //   { topic: "karaoke", confidence: 0.85, hierarchy: [], taxonomyIndex: 0 },
+ * //   { topic: "portland", confidence: 0.8, hierarchy: ["oregon"], taxonomyIndex: 1 },
+ * //   { topic: "oregon", confidence: 0.6, hierarchy: [], taxonomyIndex: 1 }
  * // ]
  */
 export class TopicParser {
@@ -62,13 +61,90 @@ export class TopicParser {
   ];
 
   /**
-   * Parse topics string with confidence scores and apply penalty system
+   * Parse topics string - supports both hierarchical and legacy flat format
    */
   static parse(topicsString: string): ParsedTopic[] {
     if (!topicsString) return [];
 
+    const normalized = topicsString.toLowerCase().trim();
+
+    // Check if this is hierarchical format (contains > or |)
+    if (normalized.includes('>') || normalized.includes('|')) {
+      return this._parseHierarchical(normalized);
+    }
+
+    // Legacy flat format: "topic:conf,topic:conf"
+    return this._parseLegacyFlat(normalized);
+  }
+
+  /**
+   * Parse hierarchical taxonomy format
+   * Example: "baby-ketten-klub:0.95 > karaoke:0.85 | portland:0.8 > oregon:0.6"
+   */
+  private static _parseHierarchical(topicsString: string): ParsedTopic[] {
+    const allTopics: ParsedTopic[] = [];
+
+    // Split by " | " to get separate taxonomies
+    const taxonomies = topicsString.split('|').map(t => t.trim()).filter(t => t.length > 0);
+
+    taxonomies.forEach((taxonomy, taxonomyIndex) => {
+      // Split by " > " to get hierarchy levels (specific → general)
+      const levels = taxonomy.split('>').map(l => l.trim()).filter(l => l.length > 0);
+
+      // Parse each level as "topic:confidence"
+      const parsedLevels = levels.map(level => {
+        const [topic, confStr] = level.split(':');
+        const confidence = parseFloat(confStr) || 0.5;
+        return { topic: topic.trim(), confidence };
+      });
+
+      // Build hierarchy array for each level
+      parsedLevels.forEach((level, index) => {
+        // Hierarchy = all more general levels after this one
+        const hierarchy = parsedLevels.slice(index + 1).map(l => l.topic);
+
+        // Apply penalty system (less aggressive for hierarchical data)
+        let adjustedConfidence = level.confidence;
+        const normalizedTopic = this._normalizeTopic(level.topic);
+
+        if (this.USELESS_WORDS.includes(normalizedTopic)) {
+          adjustedConfidence = Math.min(adjustedConfidence, 0.2);
+        } else if (this.BROAD_CATEGORIES.includes(normalizedTopic)) {
+          // Only apply penalty if it's at the TOP of the hierarchy (most specific)
+          // If it's deeper in hierarchy, it's supposed to be broad
+          if (index === 0) {
+            adjustedConfidence = adjustedConfidence * 0.5;
+          }
+        } else if (this.SOMEWHAT_GENERIC.includes(normalizedTopic)) {
+          if (index === 0) {
+            adjustedConfidence = adjustedConfidence * 0.7;
+          }
+        } else if (this.ACTIVITY_WORDS.includes(normalizedTopic)) {
+          if (index === 0) {
+            adjustedConfidence = adjustedConfidence * 0.85;
+          }
+        }
+
+        if (adjustedConfidence > 0.15) {
+          allTopics.push({
+            topic: normalizedTopic,
+            confidence: adjustedConfidence,
+            hierarchy,
+            taxonomyIndex
+          });
+        }
+      });
+    });
+
+    return allTopics;
+  }
+
+  /**
+   * Parse legacy flat format (backward compatibility)
+   * Example: "github:0.9,better-tabs-ai:0.95"
+   */
+  private static _parseLegacyFlat(topicsString: string): ParsedTopic[] {
     const topics = topicsString
-      .toLowerCase()
       .split(',')
       .map(t => t.trim())
       .filter(t => t.length > 0)
@@ -79,34 +155,25 @@ export class TopicParser {
           const confidence = parseFloat(confStr) || 0.5;
           return { topic: topic.trim(), confidence };
         }
-        // Legacy format without confidence - assume medium confidence
         return { topic: t, confidence: 0.5 };
       })
       .map(({ topic, confidence }) => {
-        // Normalize topic (create new variable, don't mutate)
-        let normalizedTopic = topic.replace(/\.(com|net|org|io|dev|ai)$/i, '');
-        if (normalizedTopic.endsWith('s') && normalizedTopic.length > 3) {
-          normalizedTopic = normalizedTopic.slice(0, -1);
-        }
-
-        // Apply category penalty system - broader categories get progressively lower weights
-        // Even if AI says "shopping:0.9", it's still a broad category, not a specific topic
+        const normalizedTopic = this._normalizeTopic(topic);
         let adjustedConfidence = confidence;
 
         if (this.USELESS_WORDS.includes(normalizedTopic)) {
-          adjustedConfidence = Math.min(adjustedConfidence, 0.2); // Cap at very low
+          adjustedConfidence = Math.min(adjustedConfidence, 0.2);
         } else if (this.BROAD_CATEGORIES.includes(normalizedTopic)) {
-          adjustedConfidence = adjustedConfidence * 0.5; // 50% penalty for broad categories
+          adjustedConfidence = adjustedConfidence * 0.5;
         } else if (this.SOMEWHAT_GENERIC.includes(normalizedTopic)) {
-          adjustedConfidence = adjustedConfidence * 0.7; // 30% penalty for generic terms
+          adjustedConfidence = adjustedConfidence * 0.7;
         } else if (this.ACTIVITY_WORDS.includes(normalizedTopic)) {
-          adjustedConfidence = adjustedConfidence * 0.85; // 15% penalty for actions
+          adjustedConfidence = adjustedConfidence * 0.85;
         }
-        // Specific topics (github, better-tabs-ai, baby-ketten-klub, etc.) keep full confidence!
 
         return { topic: normalizedTopic, confidence: adjustedConfidence };
       })
-      .filter(({ confidence }) => confidence > 0.15); // Remove only truly useless topics
+      .filter(({ confidence }) => confidence > 0.15);
 
     // Remove duplicates, keeping highest confidence
     const topicMap = new Map<string, number>();
@@ -117,6 +184,17 @@ export class TopicParser {
     });
 
     return Array.from(topicMap, ([topic, confidence]) => ({ topic, confidence }));
+  }
+
+  /**
+   * Normalize a topic string (remove TLDs, singular/plural, etc.)
+   */
+  private static _normalizeTopic(topic: string): string {
+    let normalized = topic.replace(/\.(com|net|org|io|dev|ai)$/i, '');
+    if (normalized.endsWith('s') && normalized.length > 3) {
+      normalized = normalized.slice(0, -1);
+    }
+    return normalized;
   }
 
   /**

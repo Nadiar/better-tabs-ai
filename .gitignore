@@ -86,6 +86,11 @@ test-*.html
 test-results/
 playwright-report/
 
+# Chrome profiles for AI testing
+chromium-profile/
+chrome-ai-profile/
+chrome-ai-test-profile/
+
 # Temporary and diagnostic files
 *temp*
 *diagnostic*

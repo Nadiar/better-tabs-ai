@@ -72,6 +72,7 @@ interface StagedStateContextValue {
   handleSearchChange: (term: string) => void;
   handleSelectTab: (tabId: number, event: React.MouseEvent) => void;
   handleFindGroup: (tabId: number, event: React.MouseEvent) => Promise<void>;
+  handleTabContextMenu: (e: React.MouseEvent, tab: TabData) => void;
 }
 
 // Staged State Context - Provides staged state to all components
@@ -114,6 +115,15 @@ function App() {
   const [lastAnalysisClick, setLastAnalysisClick] = useState(0);
   const [selectedTabs, setSelectedTabs] = useState<number[]>([]);
   const [showAdvancedOptions, setShowAdvancedOptions] = useState(false);
+
+  // Context menu state
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    tabId: number;
+    url: string;
+    title: string;
+  } | null>(null);
 
   // Undo/Redo functionality
   const undoRedo = useUndoRedo(stagedState, setStagedState);
@@ -551,10 +561,10 @@ function App() {
     try {
       NotificationManager.info('Collecting debug info...');
 
+      // Get comprehensive debug info including AI conversation log
+      const debugData = await chrome.runtime.sendMessage({ action: 'getDebugInfo' });
       const aiStatus = await chrome.runtime.sendMessage({ action: 'checkAIAvailability' });
       const progress = await chrome.runtime.sendMessage({ action: 'getAnalysisProgress' });
-      const cacheStats = await chrome.runtime.sendMessage({ action: 'getCacheStats' });
-      const lastResults = await chrome.runtime.sendMessage({ action: 'getLastAnalysisResults' });
 
       const tabsResult = await ChromeAPI.getAllTabs();
       const groupsResult = await ChromeAPI.getTabsAndGroups();
@@ -563,12 +573,12 @@ function App() {
         timestamp: new Date().toISOString(),
         aiAvailability: aiStatus,
         analysisProgress: progress,
-        cacheStats: cacheStats,
-        lastResults: lastResults ? {
-          hasResults: !!lastResults.results,
-          suggestionCount: lastResults.results?.suggestions?.length || 0,
-          analysisCount: lastResults.results?.analyses?.length || 0,
-          suggestions: lastResults.results?.suggestions
+        cacheStats: debugData.cacheStats,
+        lastResults: debugData.analysisResults ? {
+          hasResults: !!debugData.analysisResults,
+          suggestionCount: debugData.analysisResults?.suggestions?.length || 0,
+          analysisCount: debugData.analysisResults?.analyses?.length || 0,
+          suggestions: debugData.analysisResults?.suggestions
         } : null,
         currentState: {
           totalTabs: tabsResult.success ? tabsResult.data.length : 0,
@@ -579,12 +589,14 @@ function App() {
           stagedTabs: stagedState.tabs.length,
           suggestionsInState: suggestions?.length || 0,
           suggestionsState: suggestions
-        }
+        },
+        // AI Conversation Log - Full prompt/response history
+        aiConversationLog: debugData.aiConversationLog || []
       };
 
       const debugText = JSON.stringify(debugInfo, null, 2);
       await navigator.clipboard.writeText(debugText);
-      NotificationManager.success('Debug info copied to clipboard!');
+      NotificationManager.success('Debug info copied to clipboard! (includes AI conversation log)');
     } catch (error) {
       NotificationManager.error(`Failed to collect debug info: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
@@ -620,67 +632,37 @@ function App() {
     });
 
     try {
-      // Use shared AIOperations
-      const result = await AIOperations.analyzeAllTabs();
+      // Always force refresh when user explicitly clicks Analyze button
+      // This ensures they get fresh results with the latest prompt/settings
+      NotificationManager.info('Analyzing tabs with latest settings...');
+      const result = await chrome.runtime.sendMessage({
+        action: 'analyzeAllTabs',
+        forceRefresh: true
+      });
 
-      if (!result.success) {
-        NotificationManager.error(`Analysis failed: ${result.error.message}`);
+      if (!result || result.error) {
+        NotificationManager.error(`Analysis failed: ${result?.error || 'Unknown error'}`);
         await finishAnalyzing();
         return;
       }
 
-      // Check if no tabs to analyze
-      if (result.data.analyses?.length === 0 && result.data.suggestions?.length === 0) {
-        NotificationManager.info(result.data.message || 'No tabs to analyze');
-        await finishAnalyzing();
-        return;
-      }
-
-      // Check if using cached results
-      const isCached = (result.data as any).cached;
-
-      if (isCached) {
-        // Using cached results - check for double-click to force refresh
-        const now = Date.now();
-        const timeSinceLastClick = now - lastAnalysisClick;
-        const isDoubleClick = timeSinceLastClick < 5000;
-        setLastAnalysisClick(now);
-
-        if (isDoubleClick) {
-          // Force refresh on double-click
-          NotificationManager.info('Force refreshing analysis...');
-          // Call analyzeAllTabs with forceRefresh
-          const refreshResult = await chrome.runtime.sendMessage({
-            action: 'analyzeAllTabs',
-            forceRefresh: true
-          });
-
-          if (refreshResult.started) {
-            pollForAnalysisResults();
-          } else if (refreshResult.suggestions) {
-            setSuggestionsAndConvert(refreshResult.suggestions);
-            NotificationManager.success(`Found ${refreshResult.suggestions.length} grouping suggestions`);
-            await finishAnalyzing();
-          }
-        } else {
-          // First click - use cached results
-          const cachedSuggestions = result.data.suggestions || [];
-          setSuggestionsAndConvert(cachedSuggestions);
-          NotificationManager.success((result.data as any).message || 'Analysis complete (cached)' + ' - Click again to force refresh');
-          await finishAnalyzing();
-        }
-      } else if ((result.data as any).started) {
+      // Handle background analysis (async processing)
+      if (result.started) {
         // Background analysis started - poll for results
         debug('🔄 Analysis started, polling for results...');
-        NotificationManager.info('Analysis started in background...');
         setLastAnalysisClick(Date.now());
         pollForAnalysisResults();
-      } else if (result.data.suggestions) {
+        await finishAnalyzing();
+      } else if (result.suggestions) {
         // Immediate results
-        debug('✅ Immediate results, suggestions:', result.data.suggestions);
+        debug('✅ Immediate results, suggestions:', result.suggestions);
         setLastAnalysisClick(Date.now());
-        setSuggestionsAndConvert(result.data.suggestions);
-        NotificationManager.success(`Found ${result.data.suggestions.length} grouping suggestions`);
+        setSuggestionsAndConvert(result.suggestions);
+        NotificationManager.success(`Found ${result.suggestions.length} grouping suggestions`);
+        await finishAnalyzing();
+      } else {
+        // No suggestions found
+        NotificationManager.info('No grouping suggestions found');
         await finishAnalyzing();
       }
     } catch (error) {
@@ -847,6 +829,105 @@ function App() {
     }
   }, [selectedTabs, stagedState.tabs, stagedState.groups, suggestions, updateStaged]);
 
+  // Helper function to extract root domain
+  const getRootDomain = (hostname: string): string => {
+    const parts = hostname.split('.');
+    // For hostnames like "www.example.com", return "example.com"
+    // For "example.com", return "example.com"
+    return parts.length >= 2
+      ? parts.slice(-2).join('.')
+      : hostname;
+  };
+
+  // Handle right-click context menu
+  const handleTabContextMenu = (e: React.MouseEvent, tab: TabData) => {
+    e.preventDefault();
+
+    // Check if URL is valid for exclusion
+    try {
+      new URL(tab.url);
+
+      setContextMenu({
+        x: e.clientX,
+        y: e.clientY,
+        tabId: tab.id,
+        url: tab.url,
+        title: tab.title
+      });
+    } catch (error) {
+      // Invalid URL (chrome://, about:blank, etc.)
+      NotificationManager.warning('Cannot exclude special browser pages');
+    }
+  };
+
+  // Handle exclusion
+  const handleExcludeTab = async (type: 'domain' | 'subdomain' | 'uri') => {
+    if (!contextMenu) return;
+
+    try {
+      const url = new URL(contextMenu.url);
+      let pattern = '';
+
+      switch (type) {
+        case 'domain':
+          pattern = url.hostname;
+          break;
+        case 'subdomain':
+          const rootDomain = getRootDomain(url.hostname);
+          pattern = '*.' + rootDomain;
+          break;
+        case 'uri':
+          pattern = url.hostname + url.pathname;
+          // Remove trailing slash
+          if (pattern.endsWith('/')) {
+            pattern = pattern.slice(0, -1);
+          }
+          // Add wildcard if not already there
+          if (!pattern.endsWith('/*')) {
+            pattern += '/*';
+          }
+          break;
+      }
+
+      // Get current settings
+      const response = await chrome.runtime.sendMessage({ action: 'getSettings' });
+      const currentPatterns = response.settings.excludedPatterns || [];
+
+      // Check if pattern already exists
+      if (currentPatterns.some((p: any) => p.pattern === pattern && p.type === type)) {
+        NotificationManager.info('Pattern already excluded');
+        setContextMenu(null);
+        return;
+      }
+
+      // Add new pattern
+      const newPattern = {
+        pattern,
+        type,
+        enabled: true,
+        addedDate: Date.now()
+      };
+
+      // Save
+      await chrome.runtime.sendMessage({
+        action: 'saveSettings',
+        settings: {
+          excludedPatterns: [...currentPatterns, newPattern]
+        }
+      });
+
+      NotificationManager.success(`Excluded: ${pattern}`);
+      setContextMenu(null);
+
+      // Optionally: trigger re-analysis to update suggestions
+      // await chrome.runtime.sendMessage({ action: 'analyzeAllTabs' });
+    } catch (error) {
+      console.error('Error adding exclusion:', error);
+      NotificationManager.error('Failed to add exclusion');
+      setContextMenu(null);
+    }
+  };
+
   // Keyboard shortcuts for undo/redo
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -865,11 +946,15 @@ function App() {
         e.preventDefault();
         undoRedo.redo();
       }
+      // Escape key to close context menu
+      if (e.key === 'Escape' && contextMenu) {
+        setContextMenu(null);
+      }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [undoRedo]);
+  }, [undoRedo, contextMenu]);
 
   const contextValue: StagedStateContextValue = {
     originalState,
@@ -897,7 +982,8 @@ function App() {
     dismissConflictBanner,
     handleSearchChange,
     handleSelectTab,
-    handleFindGroup
+    handleFindGroup,
+    handleTabContextMenu
   };
 
   if (error) {
@@ -914,6 +1000,71 @@ function App() {
     <ErrorBoundary>
       <StagedStateContext.Provider value={contextValue}>
         {isLoading ? <LoadingState /> : <Layout />}
+
+        {/* Context Menu */}
+        {contextMenu && (
+          <>
+            {/* Backdrop to close menu */}
+            <div
+              className="context-menu-backdrop"
+              onClick={() => setContextMenu(null)}
+            />
+
+            {/* Context Menu */}
+            <div
+              className="context-menu"
+              style={{
+                top: `${contextMenu.y}px`,
+                left: `${contextMenu.x}px`
+              }}
+            >
+              <div className="context-menu-header">
+                Exclude from grouping
+              </div>
+
+              <button
+                className="context-menu-item"
+                onClick={() => handleExcludeTab('domain')}
+              >
+                <span className="menu-icon">🚫</span>
+                <div className="menu-content">
+                  <div className="menu-label">This domain</div>
+                  <div className="menu-pattern">{new URL(contextMenu.url).hostname}</div>
+                </div>
+              </button>
+
+              <button
+                className="context-menu-item"
+                onClick={() => handleExcludeTab('subdomain')}
+              >
+                <span className="menu-icon">🚫</span>
+                <div className="menu-content">
+                  <div className="menu-label">All subdomains</div>
+                  <div className="menu-pattern">
+                    *.{getRootDomain(new URL(contextMenu.url).hostname)}
+                  </div>
+                </div>
+              </button>
+
+              <button
+                className="context-menu-item"
+                onClick={() => handleExcludeTab('uri')}
+              >
+                <span className="menu-icon">🚫</span>
+                <div className="menu-content">
+                  <div className="menu-label">This path</div>
+                  <div className="menu-pattern">
+                    {new URL(contextMenu.url).hostname + new URL(contextMenu.url).pathname}/*
+                  </div>
+                </div>
+              </button>
+
+              <div className="context-menu-footer">
+                Manage exclusions in Settings
+              </div>
+            </div>
+          </>
+        )}
       </StagedStateContext.Provider>
     </ErrorBoundary>
   );

@@ -14,10 +14,11 @@ interface SuggestedGroupProps {
   suggestionIndex: number;
   activeDropTarget: string | null;
   dropPosition: 'before' | 'after' | null;
+  onTabContextMenu?: (e: React.MouseEvent, tab: TabData) => void;
 }
 
 // Suggested Group - Displays an AI-generated grouping suggestion
-function SuggestedGroup({ suggestion, tabs, onCreate, onDismiss, onRegenerateName, duplicateTabs = [], suggestionIndex, activeDropTarget, dropPosition }: SuggestedGroupProps): JSX.Element {
+function SuggestedGroup({ suggestion, tabs, onCreate, onDismiss, onRegenerateName, duplicateTabs = [], suggestionIndex, activeDropTarget, dropPosition, onTabContextMenu }: SuggestedGroupProps): JSX.Element {
   const suggestedTabs = tabs.filter(tab => suggestion.tabIds?.includes(tab.id));
   const [isGeneratingName, setIsGeneratingName] = useState(false);
 
@@ -124,6 +125,12 @@ function SuggestedGroup({ suggestion, tabs, onCreate, onDismiss, onRegenerateNam
           {suggestedTabs.map(tab => {
             const isDuplicate = duplicateTabs.includes(tab.id);
             const isDropTarget = activeDropTarget === `tab-${tab.id}`;
+            const tabConfidence = suggestion.tabConfidences?.[tab.id];
+
+            // Debug: Log confidence data
+            if (tabConfidence !== undefined) {
+              console.log(`[SuggestedGroup] Tab ${tab.id} confidence:`, tabConfidence);
+            }
 
             return (
               <SortableTabCard
@@ -135,6 +142,8 @@ function SuggestedGroup({ suggestion, tabs, onCreate, onDismiss, onRegenerateNam
                 dropPosition={isDropTarget ? dropPosition : null}
                 onSelect={() => {}}
                 onFindGroup={() => {}}
+                tabConfidence={tabConfidence}
+                onContextMenu={onTabContextMenu}
               />
             );
           })}

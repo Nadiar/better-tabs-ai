@@ -9,10 +9,11 @@ interface GroupsColumnProps {
   duplicateTabs?: number[];
   activeDropTarget: string | null;
   dropPosition: 'before' | 'after' | null;
+  onTabContextMenu?: (e: React.MouseEvent, tab: TabData) => void;
 }
 
 // Groups Column - Center column showing all groups (both regular and suggested)
-function GroupsColumn({ groups, tabs, duplicateTabs = [], activeDropTarget, dropPosition }: GroupsColumnProps): JSX.Element {
+function GroupsColumn({ groups, tabs, duplicateTabs = [], activeDropTarget, dropPosition, onTabContextMenu }: GroupsColumnProps): JSX.Element {
   const { updateStaged } = useStagedStateContext();
 
   // Separate ephemeral (suggested) groups from regular groups
@@ -69,6 +70,7 @@ function GroupsColumn({ groups, tabs, duplicateTabs = [], activeDropTarget, drop
               activeDropTarget={activeDropTarget}
               dropPosition={dropPosition}
               onDismiss={group.isSuggested ? () => handleDismissGroup(group.id) : null}
+              onTabContextMenu={onTabContextMenu}
             />
           ))
         )}
