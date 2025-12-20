@@ -1,5 +1,6 @@
 // Batch Applier - Apply calculated diffs to Chrome
 // To be implemented in Phase 3
+import { debug } from './debug.js';
 
 const BatchApplier = {
   /**
@@ -9,7 +10,7 @@ const BatchApplier = {
    */
   async applyBatch(operations) {
     // TODO: Implement in Phase 3
-    console.log('Applying operations:', operations);
+    debug('Applying operations:', operations);
 
     return {
       success: true,

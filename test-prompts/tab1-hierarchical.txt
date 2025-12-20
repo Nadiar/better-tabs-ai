@@ -1,0 +1,22 @@
+Extract 1-3 hierarchical topic taxonomies for this page.
+
+Title: "Kubernetes IngressRoute | Traefik | v2.4"
+URL: doc.traefik.io/traefik/v2.4/providers/kubernetes-crd/
+
+CRITICAL FORMAT RULES:
+1. Each taxonomy: "specific:0.XX > general:0.XX > broader:0.XX"
+2. Multiple taxonomies separated by " | " (space-pipe-space)
+3. Hierarchy levels separated by " > " (space-greater-space)
+4. NO other punctuation (commas, periods, etc.)
+
+CORRECT EXAMPLES:
+"baby-ketten-klub:0.95 > karaoke:0.85 | portland:0.8 > oregon:0.6"
+"better-tabs-ai:0.95 > chrome-extension:0.9 | github:0.95 > code-hosting:0.8"
+"reddit:0.9 > social-media:0.7 | politics:0.9 > news:0.8"
+
+WRONG (do NOT do this):
+"Kubernetes | Traefik | Networking" (missing confidence, wrong format)
+"kubernetes,traefik,networking" (commas not allowed)
+"kubernetes:0.9, traefik:0.8" (commas not allowed)
+
+Return ONLY the formatted taxonomy string, nothing else.

@@ -42,9 +42,9 @@ Complete drag-and-drop interface with AI-powered tab organization
 
 ### 🎬 Drag & Drop Workflow
 
-![Drag & Drop Animation](screenshots/drag_drop_animation.gif)
+![Drag & Drop Demo](screenshots/drag-drop-demo.png)
 
-Drag tabs between groups with smooth visual feedback and staged changes
+Drag tabs between groups with smooth visual feedback and staged changes - complete workflow from ungrouped to grouped
 
 ### 🤖 AI Suggestions in Action
 
@@ -52,7 +52,70 @@ Drag tabs between groups with smooth visual feedback and staged changes
 
 AI analyzes ungrouped tabs and suggests intelligent groupings with confidence scores
 
-## Latest Updates (v1.5.2)
+## Latest Updates (v2.3.0)
+
+### 🎉 Ephemeral Groups & TypeScript Migration Release
+
+#### **✅ Ephemeral Groups Feature**
+- **AI Suggested Groups**: AI-generated groups appear as ephemeral (temporary) suggestions
+- **Visual Distinction**: Suggested groups shown with dashed borders and "Suggested" badges
+- **Granular Control**: Three options for each suggestion:
+  - **Apply**: Convert all ephemeral groups to permanent groups
+  - **Dismiss**: Remove individual ephemeral group and move tabs back to ungrouped
+  - **Cancel**: Remove all ephemeral groups at once
+- **Smart Workflow**: Make changes to AI suggestions before committing them
+- **Confidence Scores**: Visual confidence indicators for AI grouping decisions
+
+#### **✅ Code Quality & TypeScript Migration**
+- **TypeScript Conversion**: 15/16 components fully typed (93.75% coverage)
+- **Type Safety**: Complete prop interfaces, event handlers, and return types
+- **Clean Code**: Removed all console.log statements, created debug utility
+- **Performance**: Extracted utility functions to prevent recreation on every render
+- **Production Ready**: 71/71 E2E tests passing with excellent performance
+
+#### **✅ Enhanced Testing**
+- **Comprehensive E2E Tests**: 71 Playwright tests covering all features
+- **Ephemeral Groups Coverage**: 6 dedicated tests for ephemeral groups workflow
+- **Performance**: Test suite completes in ~60 seconds (down from 180s+ timeouts)
+- **CI/CD Ready**: Fixed CSS selector strict mode violations and timing issues
+
+## Previous Updates (v2.1.0)
+
+### 🚀 AI & Settings Enhancement Release
+
+#### **✅ AI Grouping Improvements (Phases A-C)**
+- **Pattern Detection**: Automatically detect same-domain tabs, tool ecosystems (*arr stack, Google Workspace, Destiny tools), and keyword matches
+- **Enhanced AI Prompt**: Better instructions for domain similarity, shopping relationships, and tool recognition
+- **Confidence Boosting**: +30% for same domain, +40% for known tool ecosystems, +10% for keyword matches
+- **Smart Suggestions**: Pattern-based suggestions prioritized over category matching
+- **Tool Ecosystems**: Recognizes Media Server Tools (Radarr/Sonarr), Google Workspace, Destiny Tools, Development Tools
+
+#### **✅ Settings Infrastructure (Phases D-E)**
+- **Dynamic Confidence Threshold**: Adjustable from 0.5 (aggressive) to 0.9 (conservative) - default lowered to 0.5
+- **Max Suggestions Limit**: Configurable (default: 10)
+- **Settings Persistence**: Stored in chrome.storage.sync, syncs across devices
+- **Backend Complete**: Full settings management (get/save/reset) ready for UI
+- **Message Handlers**: 'getSettings', 'saveSettings', 'resetSettings' actions available
+
+## Previous Updates (v2.0.0)
+
+### 🎉 Major Release: Full Drag & Drop Interface Complete (Phases 7-9)
+
+#### **✅ Phase 7: Undo/Redo & Polish**
+- **Undo/Redo**: Track last 5 state snapshots with keyboard shortcuts (Ctrl+Z, Ctrl+Shift+Z, Ctrl+Y)
+- **Undo/Redo Buttons**: Visual buttons in header with descriptive tooltips
+- **Custom Tooltips**: Rich tooltips showing full tab title and URL on hover (500ms delay)
+- **Enhanced Progress**: Progress bar with percentage for 20+ operations
+- **Keyboard Support**: Full keyboard shortcut integration for undo/redo operations
+
+#### **✅ Phase 8: Performance & Optimization**
+- **Memoization**: useMemo and useCallback optimizations to prevent unnecessary re-renders
+- **Animation Throttling**: Faster transitions (0.1s) for 50+ tabs
+- **Heavy Load Mode**: Disabled animations for 100+ tabs to maintain 60fps
+- **Smart Filtering**: Memoized tab filtering to improve search performance
+- **Reduced Re-renders**: Callback memoization in GroupsColumn and UngroupedColumn
+
+## Previous Updates (v1.5.2)
 
 ### 🚀 Full Interface Implementation (Phases 1-6 Complete)
 

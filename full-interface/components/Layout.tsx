@@ -1,0 +1,448 @@
+import React, { useState, useMemo } from 'react';
+import { DndContext, DragOverlay, PointerSensor, useSensor, useSensors, closestCenter, pointerWithin, DragStartEvent, DragOverEvent, DragEndEvent, CollisionDetection } from '@dnd-kit/core';
+import { useStagedStateContext } from '../app';
+import Header from './Header';
+import ConflictBanner from './ConflictBanner';
+import UngroupedColumn from './UngroupedColumn';
+import GroupsColumn from './GroupsColumn';
+import NewGroupBox from './NewGroupBox';
+import TabCard from './TabCard';
+import ToastContainer from './Toast';
+import ProgressBar from './ProgressBar';
+import { debug, debugError } from '../utils/debug';
+import { TabData, ChromeColor } from '@shared/types';
+
+type DropPosition = 'before' | 'after' | null;
+
+// Layout Component - Main 3-column layout with drag & drop
+function Layout(): React.ReactElement {
+  const { stagedState, hasChanges, showConflictBanner, isApplying, isAnalyzing, analysisProgress, applyProgress, toasts, suggestions, searchTerm, duplicateTabs, showAdvancedOptions, selectedTabs, undoRedo, resetToOriginal, applyChanges, analyzeTabs, clearCache, copyDebugInfo, refreshFromChrome, updateStaged, dismissConflictBanner, handleSearchChange, handleSelectTab, handleFindGroup, handleTabContextMenu } = useStagedStateContext();
+  const [activeTab, setActiveTab] = useState<TabData | null>(null);
+  const [activeDropTarget, setActiveDropTarget] = useState<string | null>(null);
+  const [dropPosition, setDropPosition] = useState<DropPosition>(null);
+
+  // Filter tabs based on search term
+  const filteredTabs = useMemo(() => {
+    if (!searchTerm.trim()) {
+      return stagedState.tabs;
+    }
+
+    const term = searchTerm.toLowerCase();
+    return stagedState.tabs.filter(tab => {
+      const titleMatch = tab.title?.toLowerCase().includes(term);
+      const urlMatch = tab.url?.toLowerCase().includes(term);
+      return titleMatch || urlMatch;
+    });
+  }, [stagedState.tabs, searchTerm]);
+
+  // Setup drag sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8, // Prevent accidental drags on clicks
+      },
+    })
+  );
+
+  // Optimize collision detection for large tab counts
+  const collisionDetectionStrategy: CollisionDetection = useMemo(() => {
+    // For 50+ tabs, use pointerWithin for better performance
+    // For < 50 tabs, use closestCenter for better UX (more forgiving)
+    return stagedState.tabs.length >= 50 ? pointerWithin : closestCenter;
+  }, [stagedState.tabs.length]);
+
+  const handleApply = async (): Promise<void> => {
+    // Check if there are ephemeral groups in staged state
+    const ephemeralGroups = stagedState.groups.filter(g => g.isSuggested);
+
+    if (ephemeralGroups.length > 0) {
+      // Convert all ephemeral groups to permanent by removing isSuggested flag
+      // This happens BEFORE applying to Chrome - user can still edit before final apply
+      updateStaged((draft) => {
+        draft.groups.forEach(group => {
+          if (group.isSuggested) {
+            delete group.isSuggested;
+            delete group.confidence; // Also remove confidence score
+          }
+        });
+      });
+
+      // Clear suggestions from state
+      if (suggestions) {
+        window.dispatchEvent(new CustomEvent('clearAllSuggestions'));
+      }
+
+      // Don't auto-apply to Chrome - let user review the permanent groups first
+      // They can click Apply again when ready
+      return;
+    }
+
+    // No ephemeral groups - proceed with normal apply to Chrome
+    await applyChanges();
+  };
+
+  const handleCancel = (): void => {
+    // Check if there are ephemeral groups
+    const ephemeralGroups = stagedState.groups.filter(g => g.isSuggested);
+
+    if (ephemeralGroups.length > 0) {
+      // Remove all ephemeral groups without confirmation
+      // (User can always re-analyze if needed)
+      updateStaged((draft) => {
+        // First, move tabs back to ungrouped BEFORE removing groups
+        const ephemeralGroupIds = draft.groups.filter(g => g.isSuggested).map(g => g.id);
+        draft.tabs.forEach(tab => {
+          if (ephemeralGroupIds.includes(tab.groupId)) {
+            tab.groupId = chrome.tabGroups.TAB_GROUP_ID_NONE;
+          }
+        });
+
+        // Then remove all ephemeral groups
+        draft.groups = draft.groups.filter(g => !g.isSuggested);
+      });
+
+      // Clear suggestions
+      if (suggestions) {
+        window.dispatchEvent(new CustomEvent('clearAllSuggestions'));
+      }
+
+      // If there are other changes too, show confirmation for those
+      // Check if there are still changes after removing ephemeral groups
+      // We'll let hasChanges handle this naturally
+      return;
+    }
+
+    // No ephemeral groups - confirm before discarding ALL changes
+    if (confirm('Discard all changes?')) {
+      resetToOriginal();
+    }
+  };
+
+  const handleRefresh = async (): Promise<void> => {
+    if (!hasChanges || confirm('Refreshing will discard unsaved changes. Continue?')) {
+      await refreshFromChrome();
+      dismissConflictBanner(); // Dismiss the banner after refreshing
+    }
+  };
+
+  const handleAnalyze = async (): Promise<void> => {
+    await analyzeTabs();
+  };
+
+  const handleDragStart = (event: DragStartEvent): void => {
+    const draggedTabId = parseInt(String(event.active.id).replace('tab-', ''), 10);
+    if (isNaN(draggedTabId)) {
+      debugError('Invalid tab ID format in drag start:', event.active.id);
+      return;
+    }
+    const tab = stagedState.tabs.find(t => t.id === draggedTabId);
+    setActiveTab(tab || null);
+  };
+
+  const handleDragOver = (event: DragOverEvent): void => {
+    const { over, activatorEvent } = event;
+
+    if (!over || !over.id) {
+      setActiveDropTarget(null);
+      setDropPosition(null);
+      return;
+    }
+
+    const overId = String(over.id);
+
+    // Only calculate position for tab-to-tab drops
+    if (overId.startsWith('tab-')) {
+      const overElement = document.querySelector(`[data-sortable-id="${overId}"]`);
+
+      if (!overElement || !activatorEvent) {
+        setActiveDropTarget(null);
+        setDropPosition(null);
+        return;
+      }
+
+      const rect = overElement.getBoundingClientRect();
+
+      // Get pointer position - handle both pointer and touch events
+      const clientX = activatorEvent.clientX || (activatorEvent.touches && activatorEvent.touches[0]?.clientX);
+
+      if (clientX === undefined) {
+        setActiveDropTarget(null);
+        setDropPosition(null);
+        return;
+      }
+
+      // Calculate which half (left = before, right = after)
+      const midpoint = rect.left + rect.width / 2;
+      const position = clientX < midpoint ? 'before' : 'after';
+
+      setActiveDropTarget(overId);
+      setDropPosition(position);
+    } else {
+      // Dropping on group or other container - no position needed
+      setActiveDropTarget(null);
+      setDropPosition(null);
+    }
+  };
+
+  const handleDragEnd = (event: DragEndEvent): void => {
+    try {
+      const { active, over } = event;
+
+      // Clear all drag state
+      setActiveTab(null);
+      setActiveDropTarget(null);
+      setDropPosition(null);
+
+      if (!over) return;
+
+      const draggedTabId = parseInt(String(active.id).replace('tab-', ''), 10);
+      if (isNaN(draggedTabId)) {
+        debugError('Invalid tab ID format in drag end:', active.id);
+        return;
+      }
+
+      const dropTarget = String(over.id);
+
+      debug('Drag end:', { draggedTabId, dropTarget, activeId: String(active.id), overId: String(over.id) });
+
+
+      // Reordering within same group (sortable) or moving to different group with position
+      if (dropTarget.startsWith('tab-')) {
+        const overTabId = parseInt(dropTarget.replace('tab-', ''), 10);
+        if (isNaN(overTabId)) {
+          debugError('Invalid over tab ID format:', dropTarget);
+          return;
+        }
+
+      updateStaged((draft) => {
+        const draggedTabIndex = draft.tabs.findIndex(t => t.id === draggedTabId);
+        const overTabIndex = draft.tabs.findIndex(t => t.id === overTabId);
+
+        if (draggedTabIndex === -1 || overTabIndex === -1) return;
+
+        const draggedTab = draft.tabs[draggedTabIndex];
+        const overTab = draft.tabs[overTabIndex];
+
+        // Check if moving to different group
+        const isDifferentGroup = draggedTab.groupId !== overTab.groupId;
+
+        if (isDifferentGroup) {
+          // Move to target group
+          draggedTab.groupId = overTab.groupId;
+        }
+
+        // Only reorder if:
+        // - Moving to different group, OR
+        // - In same group but different position
+        if (isDifferentGroup || draggedTabIndex !== overTabIndex) {
+          // Remove dragged tab from array
+          const [removed] = draft.tabs.splice(draggedTabIndex, 1);
+
+          // Find new position (index may have shifted after removal)
+          let newOverIndex = draft.tabs.findIndex(t => t.id === overTabId);
+
+          // Adjust insertion index based on drop position (before/after)
+          // dropPosition is captured from handleDragOver
+          if (dropPosition === 'after' && newOverIndex >= 0) {
+            newOverIndex += 1;
+          }
+
+          // Insert at calculated position
+          draft.tabs.splice(newOverIndex, 0, removed);
+
+          // Note: We do NOT manually update tab.index here
+          // Chrome manages tab indices automatically when we apply changes
+          // The tabs array order is just for our UI representation
+
+          debug('Reordered tabs:', {
+            draggedTabId,
+            overTabId,
+            from: draggedTabIndex,
+            to: newOverIndex,
+            position: dropPosition,
+            movedGroup: isDifferentGroup
+          });
+        }
+      });
+    }
+    // Tab dropped on a group
+    else if (dropTarget.startsWith('group-')) {
+      const groupId = parseInt(dropTarget.replace('group-', ''), 10);
+      if (isNaN(groupId)) {
+        debugError('Invalid group ID format:', dropTarget);
+        return;
+      }
+
+      updateStaged((draft) => {
+        const tab = draft.tabs.find(t => t.id === draggedTabId);
+        if (tab) {
+          tab.groupId = groupId;
+        }
+      });
+    }
+    // Tab dropped on "New Group" box
+    else if (dropTarget === 'new-group-box') {
+      debug('Creating new group for tab:', draggedTabId);
+      updateStaged((draft) => {
+        // Create new group with unique negative ID (will be replaced on Apply)
+        const newGroupId = Math.min(...draft.groups.map(g => g.id), -1) - 1;
+
+        // Pick a random unused color
+        const chromeColors: ChromeColor[] = ['grey', 'blue', 'red', 'yellow', 'green', 'pink', 'purple', 'cyan'];
+        const usedColors = draft.groups.map(g => g.color);
+        const availableColors = chromeColors.filter(c => !usedColors.includes(c));
+        const randomColor: ChromeColor = availableColors.length > 0
+          ? availableColors[Math.floor(Math.random() * availableColors.length)]
+          : chromeColors[Math.floor(Math.random() * chromeColors.length)];
+
+        const newGroup = {
+          id: newGroupId,
+          title: 'New Group',
+          color: randomColor,
+          collapsed: false
+        };
+        draft.groups.push(newGroup);
+
+        debug('Created new group:', newGroup);
+
+        // Move tab to new group
+        const tab = draft.tabs.find(t => t.id === draggedTabId);
+        if (tab) {
+          const oldGroupId = tab.groupId;
+          tab.groupId = newGroupId;
+          debug(`Moved tab ${draggedTabId} from group ${oldGroupId} to new group ${newGroupId}`);
+        } else {
+          debugError('Tab not found:', draggedTabId);
+        }
+
+        debug('Draft state after new group:', {
+          groups: draft.groups.length,
+          newGroupTabs: draft.tabs.filter(t => t.groupId === newGroupId).length
+        });
+      });
+    }
+    // Tab dropped on ungrouped area
+    else if (dropTarget === 'ungrouped-column') {
+      updateStaged((draft) => {
+        const tab = draft.tabs.find(t => t.id === draggedTabId);
+        if (tab) {
+          tab.groupId = chrome.tabGroups.TAB_GROUP_ID_NONE;
+        }
+      });
+    }
+    } catch (error) {
+      debugError('Drag end error:', error);
+      // Ensure activeTab is always cleared even on error
+      setActiveTab(null);
+    }
+  };
+
+  const handleDragCancel = (): void => {
+    setActiveTab(null);
+    setActiveDropTarget(null);
+    setDropPosition(null);
+  };
+
+  return (
+    <DndContext
+      sensors={sensors}
+      collisionDetection={collisionDetectionStrategy}
+      onDragStart={handleDragStart}
+      onDragOver={handleDragOver}
+      onDragEnd={handleDragEnd}
+      onDragCancel={handleDragCancel}
+    >
+      <div
+        className="app-container"
+        data-tab-count={
+          stagedState.tabs.length >= 100 ? "100" :
+          stagedState.tabs.length >= 50 ? "50" : "0"
+        }
+      >
+        <Header
+          hasChanges={hasChanges}
+          onApply={handleApply}
+          onCancel={handleCancel}
+          onAnalyze={handleAnalyze}
+          isApplying={isApplying}
+          isAnalyzing={isAnalyzing}
+          analysisProgress={analysisProgress}
+          onSearchChange={handleSearchChange}
+          undoRedo={undoRedo}
+          onClearCache={clearCache}
+          onCopyDebug={copyDebugInfo}
+          showAdvancedOptions={showAdvancedOptions}
+        />
+
+        {showConflictBanner && (
+          <ConflictBanner
+            onRefresh={handleRefresh}
+            onIgnore={dismissConflictBanner}
+          />
+        )}
+
+        <main className="main-content">
+          <div className="three-column-grid">
+            <UngroupedColumn
+              tabs={filteredTabs}
+              duplicateTabs={duplicateTabs}
+              suggestions={suggestions}
+              onFindGroup={handleFindGroup}
+              selectedTabs={selectedTabs}
+              onSelectTab={handleSelectTab}
+              onTabContextMenu={handleTabContextMenu}
+            />
+            <GroupsColumn
+              groups={stagedState.groups}
+              tabs={filteredTabs}
+              suggestions={suggestions}
+              duplicateTabs={duplicateTabs}
+              activeDropTarget={activeDropTarget}
+              dropPosition={dropPosition}
+              onTabContextMenu={handleTabContextMenu}
+            />
+            <NewGroupBox />
+          </div>
+        </main>
+
+        <DragOverlay>
+          {activeTab ? (
+            <div className="tab-card dragging-overlay">
+              <img
+                src={activeTab.favIconUrl && activeTab.favIconUrl.startsWith('http') ? activeTab.favIconUrl : chrome.runtime.getURL('icons/icon16.png')}
+                alt=""
+                className="tab-favicon"
+                onError={(e) => {
+                  e.target.src = chrome.runtime.getURL('icons/icon16.png');
+                }}
+              />
+              <div className="tab-info">
+                <div className="tab-title">{activeTab.title || 'Untitled'}</div>
+              </div>
+            </div>
+          ) : null}
+        </DragOverlay>
+
+      <footer className="main-footer">
+        {hasChanges && (
+          <span className="footer-status">
+            {/* TODO: Show detailed change count */}
+            Unsaved changes pending
+          </span>
+        )}
+        {isApplying && applyProgress.total > 0 && (
+          <ProgressBar
+            current={applyProgress.current}
+            total={applyProgress.total}
+            message={applyProgress.message}
+          />
+        )}
+      </footer>
+
+      <ToastContainer toasts={toasts} />
+      </div>
+    </DndContext>
+  );
+}
+
+export default Layout;

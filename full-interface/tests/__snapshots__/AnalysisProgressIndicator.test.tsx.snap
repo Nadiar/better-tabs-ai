@@ -1,0 +1,49 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`AnalysisProgressIndicator - Content > should calculate and display time remaining estimate 1`] = `
+<div>
+  <div
+    class="analysis-progress-container"
+  >
+    <div
+      class="progress-header"
+    >
+      <div
+        class="progress-status"
+      >
+        <span
+          class="status-icon"
+        >
+          ⏳
+        </span>
+        <span
+          class="status-text"
+        >
+          Analyzing 5 of 10 tabs
+        </span>
+      </div>
+      <button
+        class="btn-expand"
+        title="Expand details"
+      >
+        ▶
+      </button>
+    </div>
+    <div
+      class="progress-bar-container"
+    >
+      <div
+        class="progress-bar-fill"
+        data-status="summarizing"
+        style="width: 45%;"
+      />
+      <span
+        class="progress-percentage"
+      >
+        45
+        %
+      </span>
+    </div>
+  </div>
+</div>
+`;

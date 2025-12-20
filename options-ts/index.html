@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Better Tabs AI - Settings</title>
+</head>
+<body>
+    <div class="settings-container">
+        <header class="settings-header">
+            <img src="../icons/icon48.png" alt="Better Tabs AI">
+            <h1>Better Tabs AI Settings</h1>
+        </header>
+
+        <main class="settings-content">
+            <!-- AI Analysis Settings -->
+            <section class="settings-section">
+                <h2>🤖 AI Analysis</h2>
+                <p class="section-description">Control how aggressive the AI is at finding grouping suggestions</p>
+
+                <div class="setting-item">
+                    <label for="minConfidenceThreshold">
+                        <strong>Minimum Group Confidence</strong>
+                        <span class="setting-description">Only show group suggestions above this confidence level</span>
+                    </label>
+                    <div class="slider-container">
+                        <input type="range" id="minConfidenceThreshold"
+                               min="0.4" max="0.9" step="0.1" value="0.5">
+                        <div class="slider-labels">
+                            <span class="value-display" id="confidenceValue">0.5</span>
+                            <span class="slider-hint" id="confidenceHint">Moderate</span>
+                        </div>
+                    </div>
+                    <div class="range-labels">
+                        <span>0.4 - More suggestions (aggressive)</span>
+                        <span>0.9 - Fewer suggestions (conservative)</span>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <label for="minTabConfidence">
+                        <strong>Minimum Tab Confidence</strong>
+                        <span class="setting-description">Only include tabs with this confidence or higher in groups</span>
+                    </label>
+                    <div class="slider-container">
+                        <input type="range" id="minTabConfidence"
+                               min="0.3" max="0.9" step="0.1" value="0.5">
+                        <div class="slider-labels">
+                            <span class="value-display" id="tabConfidenceValue">0.5</span>
+                            <span class="slider-hint" id="tabConfidenceHint">Moderate</span>
+                        </div>
+                    </div>
+                    <div class="range-labels">
+                        <span>0.3 - Include uncertain tabs</span>
+                        <span>0.9 - Only very certain tabs</span>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <label for="maxSuggestions">
+                        <strong>Maximum Suggestions</strong>
+                        <span class="setting-description">Limit the number of grouping suggestions shown</span>
+                    </label>
+                    <div class="number-input">
+                        <input type="number" id="maxSuggestions" min="3" max="20" value="10">
+                        <span class="unit">suggestions</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- UI Preferences -->
+            <section class="settings-section">
+                <h2>🎨 User Interface</h2>
+
+                <div class="setting-item">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="showConfidenceScores" checked>
+                        <span>
+                            <strong>Show Confidence Scores</strong>
+                            <span class="setting-description">Display percentage confidence for each suggestion</span>
+                        </span>
+                    </label>
+                </div>
+
+                <div class="setting-item">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="showInlineSuggestions" checked>
+                        <span>
+                            <strong>Show Inline Suggestions</strong>
+                            <span class="setting-description">Display AI suggestions in the full interface</span>
+                        </span>
+                    </label>
+                </div>
+
+                <div class="setting-item">
+                    <label for="defaultGroupColor">
+                        <strong>Default Group Color</strong>
+                        <span class="setting-description">Color for newly created groups</span>
+                    </label>
+                    <select id="defaultGroupColor">
+                        <option value="grey">Grey</option>
+                        <option value="blue">Blue</option>
+                        <option value="red">Red</option>
+                        <option value="yellow">Yellow</option>
+                        <option value="green">Green</option>
+                        <option value="pink">Pink</option>
+                        <option value="purple">Purple</option>
+                        <option value="cyan">Cyan</option>
+                    </select>
+                </div>
+
+                <div class="setting-item">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="showAdvancedOptions">
+                        <span>
+                            <strong>Show Advanced Options</strong>
+                            <span class="setting-description">Display Cache and Debug buttons in popup</span>
+                        </span>
+                    </label>
+                </div>
+            </section>
+
+            <!-- AI Prompt Customization -->
+            <section class="settings-section">
+                <h2>🤖 AI Prompt Rules</h2>
+
+                <div class="setting-item">
+                    <label for="customAIPromptRules">
+                        <strong>Custom AI Grouping Rules</strong>
+                        <span class="setting-description">Customize how the AI groups your tabs</span>
+                    </label>
+                    <textarea
+                        id="customAIPromptRules"
+                        rows="15"
+                        style="font-family: monospace; font-size: 0.9rem; width: 100%; resize: vertical;"
+                        placeholder="AI prompt rules will be loaded here..."
+                    ></textarea>
+                    <div style="margin-top: 0.5rem; display: flex; gap: 0.5rem;">
+                        <button id="restoreDefaultPromptBtn" class="secondary-btn" style="font-size: 0.875rem;">
+                            🔄 Restore Default Rules
+                        </button>
+                        <span class="setting-description" style="flex: 1; display: flex; align-items: center;">
+                            Reset to the default AI grouping rules
+                        </span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Advanced Grouping Parameters -->
+            <section class="settings-section">
+                <h2>⚙️ Advanced Grouping</h2>
+                <p class="section-description">Fine-tune the grouping algorithm behavior</p>
+
+                <div class="setting-item">
+                    <label for="minMatchScore">
+                        <strong>Minimum Match Score</strong>
+                        <span class="setting-description">How similar tabs must be to suggest grouping them together</span>
+                    </label>
+                    <div class="slider-container">
+                        <input type="range" id="minMatchScore"
+                               min="0.5" max="0.9" step="0.05" value="0.7">
+                        <div class="slider-labels">
+                            <span class="value-display" id="matchScoreValue">0.7</span>
+                            <span class="slider-hint" id="matchScoreHint">Balanced</span>
+                        </div>
+                    </div>
+                    <div class="range-labels">
+                        <span>0.5 - More grouping suggestions</span>
+                        <span>0.9 - Only very similar tabs</span>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <label for="minTabsPerGroup">
+                        <strong>Minimum Tabs Per Group</strong>
+                        <span class="setting-description">Minimum number of tabs required to suggest a group</span>
+                    </label>
+                    <div class="number-input">
+                        <input type="number" id="minTabsPerGroup" min="2" max="5" value="2">
+                        <span class="unit">tabs</span>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <label for="skipLowConfidenceTabs">
+                        <strong>Skip Uncertain Tabs Below</strong>
+                        <span class="setting-description">Skip tabs where all topics have confidence below this threshold</span>
+                    </label>
+                    <div class="slider-container">
+                        <input type="range" id="skipLowConfidenceTabs"
+                               min="0.2" max="0.5" step="0.05" value="0.3">
+                        <div class="slider-labels">
+                            <span class="value-display" id="skipLowConfValue">0.3</span>
+                            <span class="slider-hint" id="skipLowConfHint">Default</span>
+                        </div>
+                    </div>
+                    <div class="range-labels">
+                        <span>0.2 - Include more uncertain tabs</span>
+                        <span>0.5 - Skip more uncertain tabs</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Exclusion List -->
+            <section class="settings-section">
+                <h2>🚫 Exclusion List</h2>
+                <p class="section-description">Exclude specific sites from AI grouping suggestions</p>
+
+                <div class="setting-item">
+                    <div id="exclusionList" class="exclusion-list">
+                        <!-- Dynamically populated -->
+                    </div>
+
+                    <div class="exclusion-add-form">
+                        <input type="text" id="newExclusionPattern"
+                               placeholder="e.g., *.example.com or example.com/path/*"
+                               style="flex: 1; font-family: monospace;">
+                        <select id="newExclusionType">
+                            <option value="domain">Domain</option>
+                            <option value="subdomain">Subdomain</option>
+                            <option value="uri">URI Path</option>
+                        </select>
+                        <button id="addExclusionBtn" class="secondary-btn">➕ Add</button>
+                    </div>
+
+                    <div class="exclusion-help">
+                        <strong>Pattern Examples:</strong><br>
+                        • <code>example.com</code> - Exact domain match<br>
+                        • <code>*.example.com</code> - All subdomains<br>
+                        • <code>example.com/docs/*</code> - Specific path and subpaths
+                    </div>
+                </div>
+            </section>
+
+            <!-- Status Display -->
+            <section class="settings-section status-section">
+                <h2>📊 Current Status</h2>
+                <div id="statusDisplay" class="status-display">
+                    <p>Loading current settings...</p>
+                </div>
+            </section>
+        </main>
+
+        <footer class="settings-footer">
+            <button id="resetBtn" class="secondary-btn">
+                🔄 Reset to Defaults
+            </button>
+            <div class="footer-actions">
+                <button id="cancelBtn" class="secondary-btn">
+                    Cancel
+                </button>
+                <button id="saveBtn" class="primary-btn">
+                    💾 Save Settings
+                </button>
+            </div>
+        </footer>
+    </div>
+
+    <div id="toast" class="toast"></div>
+
+    <script type="module" src="/src/options.ts"></script>
+</body>
+</html>

@@ -1,5 +1,8 @@
 # Chrome Extension Development .gitignore
 
+# Copilot Context (auto-generated)
+.copilot/
+
 # Node modules (if using build tools)
 node_modules/
 npm-debug.log*
@@ -64,19 +67,29 @@ web-ext-artifacts/
 *.md
 !README.md
 !CHANGELOG.md
+!DEVELOPMENT.md
+!CONTRIBUTING.md
+!BUILD.md
+!copilot-prompt-template.md
 
-# Claude AI and development files
-CLAUDE.md
-*claude*
-*CLAUDE*
+REFACTOR_PLAN.md
+REFACTOR_DECISIONS.md
+TEST_RESULTS.md
+STATUS.md
 
-# Testing and mock files
-tests/
+# Claude AI context files (auto-generated)
+.claude/
+archive/
+
+# Testing artifacts (not test source files)
 test-*.html
-test-*.py
-mock-*.html
-*Test*.js
-*Mock*.js
+test-results/
+playwright-report/
+
+# Chrome profiles for AI testing
+chromium-profile/
+chrome-ai-profile/
+chrome-ai-test-profile/
 
 # Temporary and diagnostic files
 *temp*
@@ -85,3 +98,6 @@ performance_test_results.txt
 
 # Development artifacts
 *.orig
+
+# Explicitly allow copilot-prompt-template.md
+!copilot-prompt-template.md

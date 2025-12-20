@@ -1,0 +1,38 @@
+{
+  "name": "better-tabs-ai",
+  "version": "2.2.0",
+  "description": "AI-powered Chrome extension for intelligent tab organization",
+  "scripts": {
+    "build": "npm run build:shared && npm run build:full && npm run build:popup && npm run build:options",
+    "build:shared": "tsc",
+    "build:full": "cd full-interface && npm run build",
+    "build:popup": "cd popup-react && npm run build",
+    "build:options": "cd options-ts && npm run build",
+    "build:watch": "tsc --watch",
+    "typecheck": "tsc --noEmit && cd full-interface && npm run typecheck && cd ../popup-react && tsc --noEmit && cd ../options-ts && tsc --noEmit",
+    "test": "playwright test",
+    "test:ui": "playwright test --ui",
+    "test:headed": "playwright test --headed",
+    "test:debug": "playwright test --debug",
+    "test:report": "playwright show-report",
+    "test:summarizer": "playwright test tests/e2e/summarizer-api.spec.ts",
+    "test:real-chrome": "cross-env CHROME_CHANNEL=chrome playwright test tests/e2e/real-chrome-ai.spec.ts --headed",
+    "test:unit": "vitest run",
+    "test:unit:watch": "vitest",
+    "test:unit:ui": "vitest --ui",
+    "dev:full": "cd full-interface && npm run dev",
+    "dev:popup": "cd popup-react && npm run dev",
+    "dev:options": "cd options-ts && npm run dev"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.55.1",
+    "@types/chrome": "^0.1.22",
+    "@types/node": "^24.6.2",
+    "@vitest/ui": "^3.2.4",
+    "cross-env": "^10.1.0",
+    "msw": "^2.11.3",
+    "playwright": "^1.55.1",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  }
+}
